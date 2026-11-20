@@ -5,10 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:talkora_ai/app/theme/app_theme.dart';
 import 'package:talkora_ai/core/ai/ai_provider_models.dart';
+import 'package:talkora_ai/core/audio/realistic_tts_service.dart';
+import 'package:talkora_ai/core/audio/sound_fx_service.dart';
 import 'package:talkora_ai/core/storage/app_state_provider.dart';
 import 'package:talkora_ai/core/widgets/ios_components.dart';
+import 'package:talkora_ai/core/widgets/nimo_clipboard_bar.dart';
 
-/// AI Writing & Grammar Polisher with 5 tone presets and bilingual Arabic explanations.
+/// Nimo v6.0 Titan — AI Writing, Grammar & Bilingual Polisher with Voice Read-Aloud.
 class WritingLabScreen extends ConsumerStatefulWidget {
   const WritingLabScreen({super.key});
 
@@ -29,6 +32,7 @@ class _WritingLabScreenState extends ConsumerState<WritingLabScreen> {
     ('Academic', 'أكاديمي'),
     ('IELTS Band 8+', 'مستوى IELTS 8+'),
     ('Concise Email', 'إيميل مختصر'),
+    ('Arabic Literary', 'عربي فصيح بليغ'),
   ];
 
   @override
@@ -40,6 +44,7 @@ class _WritingLabScreenState extends ConsumerState<WritingLabScreen> {
   Future<void> _polishText() async {
     final text = _inputCtrl.text.trim();
     if (text.isEmpty || _isAnalyzing) return;
+    NimoSoundFx.pop();
 
     setState(() {
       _isAnalyzing = true;
@@ -54,14 +59,12 @@ class _WritingLabScreenState extends ConsumerState<WritingLabScreen> {
     final res = await service.sendChat(
       settings: settings,
       systemPromptOverride:
-          'You are an expert English editor and coach. Rewrite the user text in a $_selectedTone tone.\n'
+          'You are an expert bilingual editor and coach. Rewrite and polish the user text in a $_selectedTone tone.\n'
           'Format your output clearly in 3 sections:\n'
           '1) Polished Version\n'
           '2) Key Corrections & Upgrades (bullet points)\n'
-          '3) Estimated Score (Grammar /10, Fluency /10) + brief Arabic explanation.',
-      messages: [
-        AiChatMessage(role: 'user', content: text, timestamp: DateTime.now()),
-      ],
+          '3) Estimated Score (Grammar /10, Fluency /10) + brief ${isAr ? 'Arabic' : 'English'} explanation.',
+      messages: [AiChatMessage(role: 'user', content: text, timestamp: DateTime.now())],
     );
 
     if (!mounted) return;
@@ -72,7 +75,7 @@ class _WritingLabScreenState extends ConsumerState<WritingLabScreen> {
         ref.read(learnerProfileProvider.notifier).addXp(20);
       } else if (res.error == 'MISSING_API_KEY') {
         _errorText = isAr
-            ? 'أضف مفتاح API من الإعدادات أولاً لتفعيل مصحح الكتابة الذكي.'
+            ? 'أضف مفتاح API من الإعدادات أو فعّل التحويل التلقائي لتشغيل مصحح الكتابة.'
             : 'Add an AI API key in Settings first to use the AI Writing Polisher.';
       } else {
         _errorText = res.error;
@@ -88,7 +91,7 @@ class _WritingLabScreenState extends ConsumerState<WritingLabScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isAr ? 'مصحح الكتابة AI' : 'AI Writing Polisher'),
+        title: Text(isAr ? 'مصحح الكتابة AI Pro' : 'AI Writing Polisher Pro'),
         actions: [
           IconButton(
             icon: const Icon(CupertinoIcons.slider_horizontal_3),
@@ -110,7 +113,7 @@ class _WritingLabScreenState extends ConsumerState<WritingLabScreen> {
           ),
           const SizedBox(height: 14),
           IosGroupedSection(
-            header: isAr ? 'النص المراد تصحيحه وتحسينه' : 'YOUR ENGLISH TEXT',
+            header: isAr ? 'النص المراد تصحيحه وتحسينه (عربي أو إنجليزي)' : 'YOUR TEXT',
             children: [
               Padding(
                 padding: const EdgeInsets.all(14),
@@ -122,8 +125,12 @@ class _WritingLabScreenState extends ConsumerState<WritingLabScreen> {
                       maxLines: 6,
                       decoration: InputDecoration(
                         hintText: isAr
-                            ? 'اكتب أو الصق أي فقرة إنجليزية هنا لتصحيحها ورفع مستواها...'
-                            : 'Write or paste any English paragraph, email, or essay here...',
+                            ? 'اكتب أو الصق أي فقرة أو إيميل هنا لتصحيحه ورفع مستواه...'
+                            : 'Write or paste any paragraph, email, or essay here...',
+                        suffixIcon: IconButton(
+                          icon: const Icon(CupertinoIcons.doc_on_clipboard, size: 19),
+                          onPressed: () => NimoClipboardHelper.pasteIntoController(context, _inputCtrl, isAr: isAr),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -138,7 +145,10 @@ class _WritingLabScreenState extends ConsumerState<WritingLabScreen> {
                           label: Text(isAr ? t.$2 : t.$1),
                           selected: selected,
                           selectedColor: theme.colorScheme.primary.withValues(alpha: 0.18),
-                          onSelected: (_) => setState(() => _selectedTone = t.$1),
+                          onSelected: (_) {
+                            NimoSoundFx.click();
+                            setState(() => _selectedTone = t.$1);
+                          },
                         );
                       }).toList(),
                     ),
@@ -183,20 +193,30 @@ class _WritingLabScreenState extends ConsumerState<WritingLabScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SelectableText(_resultText!, style: theme.textTheme.bodyLarge),
+                      SelectableText(_resultText!, style: theme.textTheme.bodyLarge?.copyWith(height: 1.5)),
                       const SizedBox(height: 12),
-                      Align(
-                        alignment: AlignmentDirectional.centerEnd,
-                        child: TextButton.icon(
-                          onPressed: () {
-                            Clipboard.setData(ClipboardData(text: _resultText!));
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(isAr ? 'تم نسخ النتيجة' : 'Result copied')),
-                            );
-                          },
-                          icon: const Icon(CupertinoIcons.doc_on_doc, size: 17),
-                          label: Text(isAr ? 'نسخ' : 'Copy'),
-                        ),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          FilledButton.tonalIcon(
+                            onPressed: () => ref.read(realisticTtsProvider).speakHuman(
+                                  text: _resultText!,
+                                  aiSettings: ref.read(aiSettingsProvider),
+                                ),
+                            icon: const Icon(CupertinoIcons.speaker_2_fill, size: 16),
+                            label: Text(isAr ? 'قراءة صوتية' : 'Read Aloud'),
+                          ),
+                          TextButton.icon(
+                            onPressed: () {
+                              Clipboard.setData(ClipboardData(text: _resultText!));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(isAr ? 'تم نسخ النتيجة' : 'Result copied')),
+                              );
+                            },
+                            icon: const Icon(CupertinoIcons.doc_on_doc, size: 17),
+                            label: Text(isAr ? 'نسخ' : 'Copy'),
+                          ),
+                        ],
                       ),
                     ],
                   ),

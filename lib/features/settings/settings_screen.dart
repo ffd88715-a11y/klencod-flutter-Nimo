@@ -11,9 +11,8 @@ import 'package:talkora_ai/core/device/native_bridge_service.dart';
 import 'package:talkora_ai/core/storage/app_state_provider.dart';
 import 'package:talkora_ai/core/widgets/ios_components.dart';
 
-/// Nimo v5.0 Ultra — Smart Auto-Latest-Model API Keys Control Center & Developer Info (YOSSEF JOO).
-/// Just paste ANY API key -> Nimo auto-detects the provider, queries live `/models`, binds the
-/// newest flagship model, and verifies the connection automatically!
+/// Nimo v6.0 Titan — Foolproof Smart API Key Control Center.
+/// Auto-detects the provider on EVERY paste, type, save, or test — impossible to bind to the wrong provider!
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
@@ -74,27 +73,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ref.read(aiSettingsProvider.notifier).selectProvider(providerId);
   }
 
-  /// Auto-detects provider from key prefix, discovers the latest live model, saves & tests!
-  Future<void> _autoBindLatestModel({String? pastedKeyOverride}) async {
-    final key = (pastedKeyOverride ?? _apiKeyCtrl.text).trim();
-    if (key.isEmpty && AiProviderCatalog.byId(_selectedProviderId).requiresApiKey) {
-      return;
-    }
-    NimoSoundFx.click();
-
-    // Auto-switch provider if user pasted a key belonging to a different provider
+  /// Auto-switches provider whenever the pasted/typed key prefix clearly matches a real provider.
+  void _syncProviderFromKeyPrefix(String rawKey) {
+    final key = rawKey.trim();
+    if (key.isEmpty || _selectedProviderId == 'custom') return;
     final detected = AiProviderCatalog.detectProviderFromKey(key);
-    if (detected != null && detected != _selectedProviderId && _selectedProviderId != 'custom') {
+    if (detected == null) return;
+    // Allow user to keep DeepSeek if they explicitly selected DeepSeek for an `sk-...` key
+    if (detected == 'openai' && _selectedProviderId == 'deepseek') return;
+    if (detected != _selectedProviderId) {
       final preset = AiProviderCatalog.byId(detected);
       setState(() {
         _selectedProviderId = detected;
-        _apiKeyCtrl.text = key;
         _baseUrlCtrl.text = preset.defaultBaseUrl;
         _modelCtrl.text = preset.defaultModel;
       });
     }
+  }
 
+  /// Auto-detects provider from key prefix, discovers the latest live model, saves & verifies live connection!
+  Future<void> _autoBindLatestModel({String? pastedKeyOverride}) async {
+    final key = (pastedKeyOverride ?? _apiKeyCtrl.text).trim();
+    if (key.isNotEmpty) {
+      _syncProviderFromKeyPrefix(key);
+    }
     final preset = AiProviderCatalog.byId(_selectedProviderId);
+    if (key.isEmpty && preset.requiresApiKey) {
+      final isAr = ref.read(learnerProfileProvider).uiLocale == 'ar';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(isAr ? 'الصق مفتاح API أولاً ثم اضغط الربط التلقائي.' : 'Paste an API key first.')),
+      );
+      return;
+    }
+    NimoSoundFx.click();
+
     final baseUrl = _baseUrlCtrl.text.trim().isEmpty ? preset.defaultBaseUrl : _baseUrlCtrl.text.trim();
 
     setState(() {
@@ -122,36 +134,47 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final settings = ref.read(aiSettingsProvider);
     final ping = await service.testConnection(settings, providerIdOverride: _selectedProviderId);
 
-    // If self-heal inside testConnection succeeded with a newer/working fallback model, save that exact model!
-    if (ping.success && ping.modelName.isNotEmpty && ping.modelName != chosenModel) {
+    // If self-heal succeeded with an alternate working model, save THAT exact verified model!
+    final verifiedModel = (ping.success && ping.modelName.isNotEmpty) ? ping.modelName : chosenModel;
+    if (verifiedModel != chosenModel) {
       await ref.read(aiSettingsProvider.notifier).saveProviderConfig(
             providerId: _selectedProviderId,
             apiKey: key,
-            model: ping.modelName,
+            model: verifiedModel,
             baseUrl: baseUrl,
             discoveredModels: discovery.availableModels,
           );
     }
 
     if (!mounted) return;
-    final finalModel = ping.success && ping.modelName.isNotEmpty ? ping.modelName : chosenModel;
     final isAr = ref.read(learnerProfileProvider).uiLocale == 'ar';
     setState(() {
       _isDiscovering = false;
-      _modelCtrl.text = finalModel;
+      _modelCtrl.text = verifiedModel;
       _lastTestResult = ping;
-      _discoveryStatus = isAr
-          ? 'تم الربط التلقائي بأحدث موديل: $finalModel (${discovery.availableModels.length} نموذج متاح)'
-          : 'Auto-bound to latest model: $finalModel (${discovery.availableModels.length} models found)';
+      _discoveryStatus = ping.success
+          ? (isAr
+              ? 'تم الربط والتحقق تلقائياً مع ${preset.shortName} • $verifiedModel (${ping.latencyMs}ms)'
+              : 'Verified & bound to ${preset.shortName} • $verifiedModel (${ping.latencyMs}ms)')
+          : (isAr
+              ? 'تم التعرف على ${preset.shortName} ($verifiedModel) — راجع رسالة التشخيص بالأسفل'
+              : 'Detected ${preset.shortName} ($verifiedModel) — check diagnostic below');
     });
   }
 
   Future<void> _saveCurrentProvider({bool showToast = true}) async {
+    // Always auto-detect provider before saving so a real key is NEVER saved under `pollinations`!
+    _syncProviderFromKeyPrefix(_apiKeyCtrl.text);
     final preset = AiProviderCatalog.byId(_selectedProviderId);
+    final cleanModel = _modelCtrl.text.trim();
+    final safeModel = (cleanModel.isEmpty || AiProviderCatalog.isLegacyInvalidModel(cleanModel))
+        ? preset.defaultModel
+        : cleanModel;
+
     await ref.read(aiSettingsProvider.notifier).saveProviderConfig(
           providerId: _selectedProviderId,
           apiKey: _apiKeyCtrl.text,
-          model: _modelCtrl.text.trim().isEmpty ? preset.defaultModel : _modelCtrl.text.trim(),
+          model: safeModel,
           baseUrl: _baseUrlCtrl.text.trim().isEmpty ? preset.defaultBaseUrl : _baseUrlCtrl.text.trim(),
         );
     await ref.read(aiSettingsProvider.notifier).updateAdvanced(
@@ -164,7 +187,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           content: Text(
-            isAr ? 'تم حفظ وتفعيل ${preset.name} بنجاح!' : '${preset.name} saved & activated!',
+            isAr ? 'تم حفظ وتفعيل ${preset.name} ($safeModel) بنجاح!' : '${preset.name} ($safeModel) saved!',
           ),
         ),
       );
@@ -215,17 +238,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isAr ? 'الإعدادات وربط المفاتيح الذكي' : 'Settings & Smart AI Keys'),
+        title: Text(isAr ? 'الإعدادات ومفاتيح AI الذكية' : 'Settings & Smart AI Keys'),
         actions: [
           TextButton(
             onPressed: _saveCurrentProvider,
             child: Text(
               isAr ? 'حفظ' : 'Save',
-              style: TextStyle(
-                color: theme.colorScheme.primary,
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
-              ),
+              style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.w700, fontSize: 16),
             ),
           ),
         ],
@@ -243,16 +262,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             child: Row(
               children: [
-                IosIconBadge(icon: preset.icon, color: preset.badgeColor, size: 46),
+                IosIconBadge(icon: ai.activePreset.icon, color: ai.activePreset.badgeColor, size: 46),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        isAr ? 'المحرك النشط حالياً' : 'Active AI Engine',
-                        style: theme.textTheme.bodySmall,
-                      ),
+                      Text(isAr ? 'المحرك النشط حالياً' : 'Active AI Engine', style: theme.textTheme.bodySmall),
                       const SizedBox(height: 2),
                       Text(
                         '${ai.activePreset.shortName} • ${ai.activeModel}',
@@ -289,7 +305,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           Padding(
             padding: const EdgeInsetsDirectional.fromSTEB(12, 0, 12, 8),
             child: Text(
-              (isAr ? 'اختر مزود الذكاء أو الصق أي مفتاح للتعرف التلقائي' : 'SELECT PROVIDER OR PASTE ANY KEY TO AUTO-DETECT')
+              (isAr ? 'اختر مزود الذكاء أو الصق أي مفتاح وسيتعرف عليه تلقائياً' : 'SELECT PROVIDER OR PASTE ANY KEY')
                   .toUpperCase(),
               style: TextStyle(
                 fontSize: 12,
@@ -385,9 +401,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Selected Provider Smart Credentials Card
+          // Smart Credentials Card
           IosGroupedSection(
-            header: isAr ? 'ربط ذكي تلقائي — ${preset.name}' : '${preset.name} SMART AUTO-BIND',
+            header: isAr ? 'الربط الفوري — ${preset.name}' : '${preset.name} INSTANT CONNECT',
             footer: isAr ? preset.descriptionAr : preset.descriptionEn,
             children: [
               Padding(
@@ -398,7 +414,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(isAr ? 'مفتاح API (API Key)' : 'API Key', style: theme.textTheme.labelLarge),
+                        Text(isAr ? 'مفتاح API (يتعرف على المزود تلقائياً)' : 'API Key (Auto-Detects Provider)',
+                            style: theme.textTheme.labelLarge),
                         Row(
                           children: [
                             CupertinoButton(
@@ -412,7 +429,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 }
                               },
                               child: Text(
-                                isAr ? 'لصق وربط تلقائي' : 'Paste & Auto-Bind',
+                                isAr ? 'لصق وربط فوري' : 'Paste & Connect',
                                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: theme.colorScheme.primary),
                               ),
                             ),
@@ -440,7 +457,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         obscureText: _obscureKey,
                         autocorrect: false,
                         enableSuggestions: false,
-                        onChanged: (_) => setState(() {}),
+                        onChanged: (val) {
+                          _syncProviderFromKeyPrefix(val);
+                          setState(() {});
+                        },
                         decoration: InputDecoration(
                           hintText: preset.apiKeyPlaceholder,
                           prefixIcon: const Icon(CupertinoIcons.lock_shield, size: 20),
@@ -456,7 +476,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    // One-Tap Auto-Discover Latest Model Button
                     SizedBox(
                       width: double.infinity,
                       height: 46,
@@ -471,9 +490,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               )
                             : const Icon(CupertinoIcons.sparkles, size: 18),
                         label: Text(
-                          isAr
-                              ? 'ربط تلقائي بأحدث موديل متاح على المفتاح'
-                              : 'Auto-Connect to Latest Available Model',
+                          isAr ? 'اتصال تلقائي بأحدث موديل + فحص المفتاح' : 'Auto-Connect Latest Model & Verify',
                         ),
                       ),
                     ),
@@ -495,10 +512,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ],
 
                     const SizedBox(height: 14),
-                    Text(
-                      isAr ? 'النموذج النشط (تم اختياره تلقائياً أو يدوياً)' : 'Active Model ID',
-                      style: theme.textTheme.labelLarge,
-                    ),
+                    Text(isAr ? 'النموذج النشط (Model ID)' : 'Active Model ID', style: theme.textTheme.labelLarge),
                     const SizedBox(height: 6),
                     Directionality(
                       textDirection: TextDirection.ltr,
@@ -568,11 +582,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           child: FilledButton.tonalIcon(
                             onPressed: _isTesting ? null : _testConnection,
                             icon: _isTesting
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CupertinoActivityIndicator(),
-                                  )
+                                ? const SizedBox(width: 16, height: 16, child: CupertinoActivityIndicator())
                                 : const Icon(CupertinoIcons.antenna_radiowaves_left_right, size: 18),
                             label: Text(isAr ? 'اختبار الاتصال' : 'Test API'),
                           ),
@@ -597,14 +607,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   ? (isAr
                                       ? 'متصل بنجاح مع ${_lastTestResult!.modelName} (${_lastTestResult!.latencyMs} ms)'
                                       : 'Connected to ${_lastTestResult!.modelName} (${_lastTestResult!.latencyMs} ms)')
-                                  : (isAr ? 'فشل الاتصال' : 'Connection Failed'),
+                                  : (isAr ? 'تعذّر الاتصال — التفاصيل:' : 'Connection Failed:'),
                               style: TextStyle(
                                 fontWeight: FontWeight.w700,
                                 color: _lastTestResult!.success ? TalkoraColors.iosGreen : TalkoraColors.iosRed,
                               ),
                             ),
                             const SizedBox(height: 4),
-                            Text(
+                            SelectableText(
                               _lastTestResult!.success
                                   ? _lastTestResult!.text
                                   : (_lastTestResult!.error == 'MISSING_API_KEY'
@@ -622,7 +632,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ],
           ),
 
-          // Collapsible Step-by-Step Key Guide
+          // Collapsible Key Guide
           IosGroupedSection(
             header: isAr ? 'كيفية الحصول على مفتاح ${preset.shortName}' : 'HOW TO GET ${preset.shortName.toUpperCase()} KEY',
             children: [
@@ -669,16 +679,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ],
           ),
 
-          // Smart AI Brain & Device Controls
+          // Super Controls
           IosGroupedSection(
-            header: isAr ? 'قدرات Nimo v5.0 المتقدمة' : 'NIMO v5.0 SUPER CONTROLS',
+            header: isAr ? 'قدرات Nimo v6.0 Titan' : 'NIMO v6.0 TITAN CONTROLS',
             children: [
               IosSettingsRow(
                 icon: CupertinoIcons.arrow_branch,
                 iconColor: TalkoraColors.iosBlue,
                 title: isAr ? 'التحويل الذكي التلقائي (Smart Fallback)' : 'Smart Auto-Fallback',
                 subtitle: isAr
-                    ? 'التبديل تلقائياً لأحدث موديل أو مفتاح احتياطي عند تعطل أي خادم'
+                    ? 'التبديل تلقائياً للمفتاح الاحتياطي أو السحابة المجانية عند تعطل أي خادم'
                     : 'Auto-switch to backup keys or Free Cloud AI if primary fails',
                 trailing: CupertinoSwitch(
                   value: ai.smartFallbackEnabled,
@@ -691,9 +701,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 icon: CupertinoIcons.sparkles,
                 iconColor: TalkoraColors.iosPurple,
                 title: isAr ? 'وضع التفكير العميق (Deep Thinking)' : 'Deep Thinking Mode',
-                subtitle: isAr
-                    ? 'تحليل أعمق وأقوى للبرمجة والأسئلة المعقدة'
-                    : 'Step-by-step deep reasoning boost',
                 trailing: CupertinoSwitch(
                   value: ai.deepThinkingEnabled,
                   activeTrackColor: TalkoraColors.iosGreen,
@@ -721,7 +728,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               IosSettingsRow(
                 icon: CupertinoIcons.waveform_circle_fill,
                 iconColor: TalkoraColors.iosPink,
-                title: isAr ? 'ملف الصوت البشري ($voiceStatus)' : 'Human Voice ($voiceStatus)',
+                title: isAr ? 'محرك الصوت ($voiceStatus)' : 'Voice Engine ($voiceStatus)',
                 onTap: () => context.push('/voice'),
               ),
             ],
@@ -750,7 +757,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             children: [
                               Text(_devName, style: theme.textTheme.titleLarge),
                               Text(
-                                isAr ? 'مطور تطبيق Nimo v5.0 Ultra' : 'Lead Developer — Nimo v5.0 Ultra',
+                                isAr ? 'مطور تطبيق Nimo v6.0 Titan' : 'Lead Developer — Nimo v6.0 Titan',
                                 style: theme.textTheme.bodySmall,
                               ),
                               Text(
@@ -770,7 +777,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             style: FilledButton.styleFrom(backgroundColor: TalkoraColors.iosGreen),
                             onPressed: () => bridge.openWhatsApp(
                               phone: _devWhatsApp,
-                              message: 'مرحباً مهندس $_devName، أتواصل معك بخصوص تطبيق Nimo v5.0 Ultra',
+                              message: 'مرحباً مهندس $_devName، أتواصل معك بخصوص تطبيق Nimo v6.0 Titan',
                             ),
                             icon: const Icon(CupertinoIcons.chat_bubble_fill, size: 18),
                             label: Text(isAr ? 'تواصل واتساب مباشر' : 'WhatsApp'),

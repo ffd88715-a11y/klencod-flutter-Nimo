@@ -5,10 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:talkora_ai/app/theme/app_theme.dart';
 import 'package:talkora_ai/core/ai/ai_provider_models.dart';
+import 'package:talkora_ai/core/audio/realistic_tts_service.dart';
+import 'package:talkora_ai/core/audio/sound_fx_service.dart';
 import 'package:talkora_ai/core/storage/app_state_provider.dart';
 import 'package:talkora_ai/core/widgets/ios_components.dart';
+import 'package:talkora_ai/core/widgets/nimo_clipboard_bar.dart';
 
-/// Bidirectional AI Instant Translator & Idiom Decoder (English <-> Arabic).
+/// Nimo v6.0 Titan — Multi-Language AI Translator & Voice Idiom Decoder.
 class TranslatorScreen extends ConsumerStatefulWidget {
   const TranslatorScreen({super.key});
 
@@ -18,10 +21,13 @@ class TranslatorScreen extends ConsumerStatefulWidget {
 
 class _TranslatorScreenState extends ConsumerState<TranslatorScreen> {
   final TextEditingController _srcCtrl = TextEditingController();
-  bool _enToAr = true;
+  String _fromLang = 'English';
+  String _toLang = 'Arabic';
   bool _loading = false;
   String? _output;
   String? _error;
+
+  static const List<String> _langs = ['Arabic', 'English', 'French', 'German', 'Spanish', 'Turkish'];
 
   @override
   void dispose() {
@@ -32,6 +38,7 @@ class _TranslatorScreenState extends ConsumerState<TranslatorScreen> {
   Future<void> _translate() async {
     final text = _srcCtrl.text.trim();
     if (text.isEmpty || _loading) return;
+    NimoSoundFx.pop();
 
     setState(() {
       _loading = true;
@@ -42,20 +49,16 @@ class _TranslatorScreenState extends ConsumerState<TranslatorScreen> {
     final settings = ref.read(aiSettingsProvider);
     final service = ref.read(universalAiServiceProvider);
     final isAr = ref.read(learnerProfileProvider).uiLocale == 'ar';
-    final direction = _enToAr ? 'English to natural Arabic' : 'Arabic to natural native English';
 
     final res = await service.sendChat(
       settings: settings,
       systemPromptOverride:
-          'You are an expert bilingual English-Arabic translator and idiom decoder. '
-          'Translate the user input from $direction.\n'
+          'You are an expert translator and idiom decoder. Translate the user text from $_fromLang into natural $_toLang.\n'
           'Provide:\n'
           '• Natural Translation\n'
           '• Idiom / Nuance Note (if any)\n'
-          '• 2 Short Real-Life Example Sentences (English + Arabic).',
-      messages: [
-        AiChatMessage(role: 'user', content: text, timestamp: DateTime.now()),
-      ],
+          '• 2 Short Real-Life Example Sentences.',
+      messages: [AiChatMessage(role: 'user', content: text, timestamp: DateTime.now())],
     );
 
     if (!mounted) return;
@@ -66,12 +69,22 @@ class _TranslatorScreenState extends ConsumerState<TranslatorScreen> {
         ref.read(learnerProfileProvider.notifier).addXp(10);
       } else if (res.error == 'MISSING_API_KEY') {
         _error = isAr
-            ? 'أضف مفتاح API في الإعدادات لتشغيل المترجم الذكي.'
-            : 'Add an AI API key in Settings to use the Smart Translator.';
+            ? 'أضف مفتاح API في الإعدادات أو فعّل التحويل التلقائي للعمل فوراً.'
+            : 'Add an AI API key in Settings or enable Smart Fallback.';
       } else {
         _error = res.error;
       }
     });
+  }
+
+  void _speak(String text, String lang) {
+    NimoSoundFx.click();
+    final locale = lang == 'Arabic' ? 'ar-EG' : 'en-US';
+    ref.read(realisticTtsProvider).speakHuman(
+          text: text,
+          aiSettings: ref.read(aiSettingsProvider),
+          locale: locale,
+        );
   }
 
   @override
@@ -81,7 +94,7 @@ class _TranslatorScreenState extends ConsumerState<TranslatorScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isAr ? 'المترجم الذكي ومفسر التعبيرات' : 'Smart AI Translator'),
+        title: Text(isAr ? 'المترجم الذكي متعدد اللغات' : 'Smart AI Translator'),
         actions: [
           IconButton(
             icon: const Icon(CupertinoIcons.slider_horizontal_3),
@@ -92,28 +105,40 @@ class _TranslatorScreenState extends ConsumerState<TranslatorScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Direction Swap Pill
           Card(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      _enToAr ? 'English' : 'العربية',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.titleMedium,
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _fromLang,
+                        isExpanded: true,
+                        items: _langs.map((l) => DropdownMenuItem(value: l, child: Text(l))).toList(),
+                        onChanged: (v) => setState(() => _fromLang = v ?? 'English'),
+                      ),
                     ),
                   ),
                   IconButton.filledTonal(
-                    onPressed: () => setState(() => _enToAr = !_enToAr),
+                    onPressed: () {
+                      NimoSoundFx.click();
+                      setState(() {
+                        final tmp = _fromLang;
+                        _fromLang = _toLang;
+                        _toLang = tmp;
+                      });
+                    },
                     icon: const Icon(CupertinoIcons.arrow_right_arrow_left, size: 18),
                   ),
                   Expanded(
-                    child: Text(
-                      _enToAr ? 'العربية' : 'English',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.titleMedium,
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _toLang,
+                        isExpanded: true,
+                        items: _langs.map((l) => DropdownMenuItem(value: l, child: Text(l))).toList(),
+                        onChanged: (v) => setState(() => _toLang = v ?? 'Arabic'),
+                      ),
                     ),
                   ),
                 ],
@@ -122,7 +147,7 @@ class _TranslatorScreenState extends ConsumerState<TranslatorScreen> {
           ),
           const SizedBox(height: 14),
           IosGroupedSection(
-            header: _enToAr ? 'ENGLISH TEXT' : 'النص العربي',
+            header: _fromLang.toUpperCase(),
             children: [
               Padding(
                 padding: const EdgeInsets.all(14),
@@ -132,25 +157,38 @@ class _TranslatorScreenState extends ConsumerState<TranslatorScreen> {
                       controller: _srcCtrl,
                       maxLines: 4,
                       decoration: InputDecoration(
-                        hintText: _enToAr
-                            ? 'Enter any English phrase or idiom (e.g. "Break a leg")...'
-                            : 'اكتب أي جملة عربية لترجمتها لإنجليزية طبيعية كأهل اللغة...',
+                        hintText: isAr ? 'اكتب أو الصق النص المراد ترجمته...' : 'Enter or paste text to translate...',
+                        suffixIcon: IconButton(
+                          icon: const Icon(CupertinoIcons.doc_on_clipboard, size: 19),
+                          onPressed: () => NimoClipboardHelper.pasteIntoController(context, _srcCtrl, isAr: isAr),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: _loading ? null : _translate,
-                        icon: _loading
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CupertinoActivityIndicator(color: Colors.white),
-                              )
-                            : const Icon(CupertinoIcons.globe, size: 19),
-                        label: Text(isAr ? 'ترجمة وشرح ذكي' : 'Translate & Decode'),
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: _loading ? null : _translate,
+                            icon: _loading
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CupertinoActivityIndicator(color: Colors.white),
+                                  )
+                                : const Icon(CupertinoIcons.globe, size: 19),
+                            label: Text(isAr ? 'ترجمة وشرح ذكي' : 'Translate & Decode'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton.filledTonal(
+                          tooltip: isAr ? 'نطق النص' : 'Speak',
+                          onPressed: () {
+                            if (_srcCtrl.text.trim().isNotEmpty) _speak(_srcCtrl.text.trim(), _fromLang);
+                          },
+                          icon: const Icon(CupertinoIcons.speaker_2_fill, size: 20),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -170,29 +208,22 @@ class _TranslatorScreenState extends ConsumerState<TranslatorScreen> {
             ),
           if (_output != null)
             IosGroupedSection(
-              header: isAr ? 'الترجمة والأمثلة' : 'TRANSLATION & EXAMPLES',
+              header: isAr ? 'الترجمة والأمثلة ($_toLang)' : 'TRANSLATION ($_toLang)',
               children: [
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SelectableText(_output!, style: theme.textTheme.bodyLarge),
+                      SelectableText(_output!, style: theme.textTheme.bodyLarge?.copyWith(height: 1.5)),
                       const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
+                      Wrap(
+                        spacing: 8,
                         children: [
-                          TextButton.icon(
-                            onPressed: () {
-                              ref.read(learnerProfileProvider.notifier).incrementVocabLearned();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(isAr ? 'تمت الإضافة لحصيلة مفرداتك (+15 XP)' : 'Saved to Vocabulary (+15 XP)'),
-                                ),
-                              );
-                            },
-                            icon: const Icon(CupertinoIcons.bookmark_fill, size: 17),
-                            label: Text(isAr ? 'حفظ للمفردات' : 'Save Word'),
+                          FilledButton.tonalIcon(
+                            onPressed: () => _speak(_output!, _toLang),
+                            icon: const Icon(CupertinoIcons.speaker_2_fill, size: 16),
+                            label: Text(isAr ? 'نطق الترجمة' : 'Speak'),
                           ),
                           TextButton.icon(
                             onPressed: () {
