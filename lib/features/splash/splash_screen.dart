@@ -1,16 +1,14 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:talkora_ai/app/theme/app_theme.dart';
 import 'package:talkora_ai/core/audio/sound_fx_service.dart';
-import 'package:talkora_ai/core/knowledge/github_knowledge_service.dart';
 import 'package:talkora_ai/core/knowledge/nimo_local_db_service.dart';
 import 'package:talkora_ai/core/storage/app_state_provider.dart';
 
-/// Nimo v5.0 Ultra — Perfectly Centered, Eye-Friendly Matte Glass Intro Screen.
+/// Nimo v7.0 Apex — Ultra-Fast Matte Glass Intro Screen (1.15s crisp launch, tap to enter instantly).
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
@@ -18,9 +16,8 @@ class SplashScreen extends ConsumerStatefulWidget {
   ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends ConsumerState<SplashScreen> with TickerProviderStateMixin {
+class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerProviderStateMixin {
   late final AnimationController _introCtrl;
-  late final AnimationController _sheenCtrl;
   Timer? _navTimer;
   bool _navigated = false;
 
@@ -31,26 +28,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with TickerProvider
     super.initState();
     _introCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1550),
+      duration: const Duration(milliseconds: 950),
     )..forward();
 
-    _sheenCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2400),
-    )..repeat();
-
-    // Warm up built-in DB and injected GitHub datasets immediately
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      ref.read(nimoLocalDbProvider.notifier).load();
-      ref.read(githubKnowledgeProvider);
-    });
-
-    Future<void>.delayed(const Duration(milliseconds: 240), () {
+    Future<void>.delayed(const Duration(milliseconds: 140), () {
       if (mounted) NimoSoundFx.chime();
     });
 
-    _navTimer = Timer(const Duration(milliseconds: 2400), _proceed);
+    _navTimer = Timer(const Duration(milliseconds: 1150), _proceed);
   }
 
   void _proceed() {
@@ -64,7 +49,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with TickerProvider
   void dispose() {
     _navTimer?.cancel();
     _introCtrl.dispose();
-    _sheenCtrl.dispose();
     super.dispose();
   }
 
@@ -80,15 +64,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with TickerProvider
 
     final emblemScale = CurvedAnimation(
       parent: _introCtrl,
-      curve: const Interval(0.0, 0.48, curve: Curves.easeOutBack),
+      curve: const Interval(0.0, 0.52, curve: Curves.easeOutBack),
     );
     final subtitleFade = CurvedAnimation(
       parent: _introCtrl,
-      curve: const Interval(0.56, 1.0, curve: Curves.easeOut),
+      curve: const Interval(0.45, 1.0, curve: Curves.easeOut),
     );
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF121417) : TalkoraColors.lightBackground,
+      backgroundColor: isDark ? TalkoraColors.darkBackground : TalkoraColors.lightBackground,
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: _proceed,
@@ -97,234 +81,112 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with TickerProvider
             child: Stack(
               fit: StackFit.expand,
               children: [
-                // Subtle centered matte radial backdrop (eye-friendly, zero harsh neon)
                 Center(
-                  child: AnimatedBuilder(
-                    animation: _sheenCtrl,
-                    builder: (_, __) {
-                      final pulse = 0.94 + 0.06 * math.sin(_sheenCtrl.value * 2 * math.pi);
-                      return Transform.scale(
-                        scale: pulse,
-                        child: Container(
-                          width: 300,
-                          height: 300,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: RadialGradient(
-                              colors: [
-                                accent.withValues(alpha: isDark ? 0.14 : 0.10),
-                                TalkoraColors.iosIndigo.withValues(alpha: 0.03),
-                                Colors.transparent,
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
+                  child: Container(
+                    width: 280,
+                    height: 280,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          accent.withValues(alpha: isDark ? 0.14 : 0.10),
+                          TalkoraColors.iosIndigo.withValues(alpha: 0.03),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-
-                // Perfectly centered brand core
                 Center(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 28),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Matte Liquid Glass Emblem
                         ScaleTransition(
                           scale: emblemScale,
-                          child: AnimatedBuilder(
-                            animation: _sheenCtrl,
-                            builder: (_, __) {
-                              final sweep = -1.6 + (_sheenCtrl.value * 3.2);
-                              return Container(
-                                width: 112,
-                                height: 112,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(32),
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      accent.withValues(alpha: 0.92),
-                                      TalkoraColors.iosIndigo.withValues(alpha: 0.86),
-                                    ],
-                                  ),
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.34),
-                                    width: 1.3,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: isDark ? 0.42 : 0.14),
-                                      blurRadius: 26,
-                                      offset: const Offset(0, 12),
-                                    ),
-                                  ],
+                          child: Container(
+                            width: 106,
+                            height: 106,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(30),
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  accent.withValues(alpha: 0.94),
+                                  TalkoraColors.iosIndigo.withValues(alpha: 0.88),
+                                ],
+                              ),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.30),
+                                width: 1.2,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: isDark ? 0.38 : 0.14),
+                                  blurRadius: 24,
+                                  offset: const Offset(0, 10),
                                 ),
-                                clipBehavior: Clip.antiAlias,
-                                child: Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    Positioned(
-                                      top: -36,
-                                      left: -20,
-                                      right: -20,
-                                      height: 76,
-                                      child: DecoratedBox(
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            begin: Alignment.topCenter,
-                                            end: Alignment.bottomCenter,
-                                            colors: [
-                                              Colors.white.withValues(alpha: 0.32),
-                                              Colors.white.withValues(alpha: 0.0),
-                                            ],
-                                          ),
-                                          borderRadius: BorderRadius.circular(60),
-                                        ),
-                                      ),
-                                    ),
-                                    Positioned.fill(
-                                      child: Transform.rotate(
-                                        angle: math.pi / 6,
-                                        child: FractionallySizedBox(
-                                          widthFactor: 0.38,
-                                          alignment: Alignment(sweep, 0),
-                                          child: DecoratedBox(
-                                            decoration: BoxDecoration(
-                                              gradient: LinearGradient(
-                                                colors: [
-                                                  Colors.white.withValues(alpha: 0.0),
-                                                  Colors.white.withValues(alpha: 0.28),
-                                                  Colors.white.withValues(alpha: 0.0),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    const Icon(CupertinoIcons.sparkles, color: Colors.white, size: 52),
-                                  ],
-                                ),
-                              );
-                            },
+                              ],
+                            ),
+                            child: const Icon(CupertinoIcons.sparkles, color: Colors.white, size: 50),
                           ),
                         ),
-                        const SizedBox(height: 26),
-
-                        // Staggered Letter-by-Letter "Nimo" Animated Wordmark (strictly centered)
+                        const SizedBox(height: 22),
                         Directionality(
                           textDirection: TextDirection.ltr,
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               for (int i = 0; i < _brandLetters.length; i++)
                                 _AnimatedBrandLetter(
                                   letter: _brandLetters[i],
                                   controller: _introCtrl,
-                                  start: 0.22 + (i * 0.09),
-                                  end: (0.55 + (i * 0.09)).clamp(0.0, 1.0),
+                                  start: 0.15 + (i * 0.08),
+                                  end: (0.50 + (i * 0.08)).clamp(0.0, 1.0),
                                   accent: accent,
                                   isDark: isDark,
                                 ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 10),
-
-                        // Subtitle, Status Pills & Smooth Progress Indicator
+                        const SizedBox(height: 8),
                         FadeTransition(
                           opacity: subtitleFade,
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               Text(
                                 s.t('subtitle'),
                                 textAlign: TextAlign.center,
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  fontSize: 15,
-                                  height: 1.4,
-                                ),
+                                style: theme.textTheme.bodyMedium?.copyWith(fontSize: 15),
                               ),
-                              const SizedBox(height: 20),
+                              const SizedBox(height: 16),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
                                 decoration: BoxDecoration(
-                                  color: isDark
-                                      ? const Color(0xFF1A1D24)
-                                      : accent.withValues(alpha: 0.10),
+                                  color: isDark ? TalkoraColors.darkSurface : accent.withValues(alpha: 0.10),
                                   borderRadius: BorderRadius.circular(22),
-                                  border: Border.all(
-                                    color: accent.withValues(alpha: 0.28),
-                                    width: 0.8,
-                                  ),
+                                  border: Border.all(color: accent.withValues(alpha: 0.28), width: 0.8),
                                 ),
                                 child: Text(
-                                  'Nimo v5.0 Ultra • YOSSEF JOO',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: accent,
-                                  ),
+                                  'Nimo v7.0 Apex • YOSSEF JOO',
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: accent),
                                 ),
                               ),
-                              const SizedBox(height: 14),
+                              const SizedBox(height: 12),
                               Text(
                                 isAr
-                                    ? '${ai.activePreset.shortName} • ${localDb.totalRecords > 0 ? '${localDb.totalRecords} سجل معرفي جاهز' : 'جاري تجهيز قواعد المعرفة...'}'
-                                    : '${ai.activePreset.shortName} • ${localDb.totalRecords > 0 ? '${localDb.totalRecords} records ready' : 'Loading knowledge engine...'}',
+                                    ? '${ai.activePreset.shortName} • ${localDb.totalRecords > 0 ? '${localDb.totalRecords} سجل جاهز' : 'تشغيل فائق السرعة...'}'
+                                    : '${ai.activePreset.shortName} • ${localDb.totalRecords > 0 ? '${localDb.totalRecords} records ready' : 'Turbo launch...'}',
                                 textAlign: TextAlign.center,
                                 style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
-                              ),
-                              const SizedBox(height: 20),
-                              SizedBox(
-                                width: 150,
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: AnimatedBuilder(
-                                    animation: _introCtrl,
-                                    builder: (_, __) => LinearProgressIndicator(
-                                      value: _introCtrl.value.clamp(0.08, 1.0),
-                                      minHeight: 4,
-                                      backgroundColor: accent.withValues(alpha: 0.16),
-                                      valueColor: AlwaysStoppedAnimation<Color>(accent),
-                                    ),
-                                  ),
-                                ),
                               ),
                             ],
                           ),
                         ),
                       ],
-                    ),
-                  ),
-                ),
-
-                // Subtle bottom tap-to-enter hint
-                Positioned(
-                  left: 24,
-                  right: 24,
-                  bottom: 22,
-                  child: FadeTransition(
-                    opacity: subtitleFade,
-                    child: Text(
-                      isAr ? 'اضغط في أي مكان للمتابعة' : 'Tap anywhere to continue',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontSize: 11.5,
-                        color: (isDark
-                                ? TalkoraColors.darkSecondaryText
-                                : TalkoraColors.lightSecondaryText)
-                            .withValues(alpha: 0.78),
-                      ),
                     ),
                   ),
                 ),
@@ -367,9 +229,9 @@ class _AnimatedBrandLetter extends StatelessWidget {
         return Opacity(
           opacity: v.clamp(0.0, 1.0),
           child: Transform.translate(
-            offset: Offset(0, (1.0 - v) * 24),
+            offset: Offset(0, (1.0 - v) * 20),
             child: Transform.scale(
-              scale: 0.76 + (0.24 * v),
+              scale: 0.80 + (0.20 * v),
               child: ShaderMask(
                 shaderCallback: (bounds) => LinearGradient(
                   begin: Alignment.topLeft,
@@ -381,7 +243,7 @@ class _AnimatedBrandLetter extends StatelessWidget {
                 child: Text(
                   letter,
                   style: const TextStyle(
-                    fontSize: 52,
+                    fontSize: 50,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 1.4,
                     color: Colors.white,

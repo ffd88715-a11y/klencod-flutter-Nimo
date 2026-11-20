@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 /// Authentic Apple iOS 18 Human Interface Guidelines (HIG) Color System.
-/// Calm matte dark surfaces without harsh neon glare.
+/// Calm matte dark surfaces (#121417 / #1A1D24) without harsh neon glare.
 class TalkoraColors {
   const TalkoraColors._();
 
@@ -39,14 +39,14 @@ class TalkoraColors {
   static const Color lightSecondaryText = Color(0xFF8E8E93);
 
   // iOS Dark Surfaces (Calm Matte Graphite — zero harsh neon)
-  static const Color darkBackground = Color(0xFF0E1015);
-  static const Color darkSurface = Color(0xFF1C1C1E);
-  static const Color darkCard = Color(0xFF1C1C1E);
-  static const Color darkFill = Color(0xFF2C2C2E);
-  static const Color darkSeparator = Color(0xFF38383A);
+  static const Color darkBackground = Color(0xFF121417);
+  static const Color darkSurface = Color(0xFF1A1D24);
+  static const Color darkCard = Color(0xFF1A1D24);
+  static const Color darkFill = Color(0xFF252932);
+  static const Color darkSeparator = Color(0xFF343944);
   static const Color darkPrimary = iosDarkBlue;
   static const Color darkText = Color(0xFFF5F5F7);
-  static const Color darkSecondaryText = Color(0xFF98989D);
+  static const Color darkSecondaryText = Color(0xFF9BA1AE);
 
   /// User-selectable iOS accent palette
   static const Map<String, Color> accentChoices = {
@@ -70,7 +70,10 @@ class TalkoraColors {
 class TalkoraTheme {
   const TalkoraTheme._();
 
-  /// iOS SF Pro Display / SF Pro Text typography metrics with crisp Arabic Tajawal fallback
+  // Memoized ThemeData cache so GoogleFonts text themes are never rebuilt on every frame
+  static final Map<String, ThemeData> _lightCache = {};
+  static final Map<String, ThemeData> _darkCache = {};
+
   static TextTheme _buildIosTextTheme(
     TextTheme base,
     bool isArabic,
@@ -108,7 +111,6 @@ class TalkoraTheme {
     }
 
     return fontTheme.copyWith(
-      // iOS Large Title (34pt Bold)
       headlineLarge: applyIos(
         fontTheme.headlineLarge,
         size: 32,
@@ -117,7 +119,6 @@ class TalkoraTheme {
         height: 1.2,
         color: mainText,
       ),
-      // iOS Title 1 (26pt Bold)
       headlineMedium: applyIos(
         fontTheme.headlineMedium,
         size: 25,
@@ -126,7 +127,6 @@ class TalkoraTheme {
         height: 1.22,
         color: mainText,
       ),
-      // iOS Title 2 (21pt Bold)
       headlineSmall: applyIos(
         fontTheme.headlineSmall,
         size: 21,
@@ -135,7 +135,6 @@ class TalkoraTheme {
         height: 1.25,
         color: mainText,
       ),
-      // iOS Title 3 (19pt Semibold)
       titleLarge: applyIos(
         fontTheme.titleLarge,
         size: 19,
@@ -144,7 +143,6 @@ class TalkoraTheme {
         height: 1.28,
         color: mainText,
       ),
-      // iOS Headline (16.5pt Semibold)
       titleMedium: applyIos(
         fontTheme.titleMedium,
         size: 16.5,
@@ -153,7 +151,6 @@ class TalkoraTheme {
         height: 1.3,
         color: mainText,
       ),
-      // iOS Body (16pt Regular)
       bodyLarge: applyIos(
         fontTheme.bodyLarge,
         size: 16,
@@ -162,7 +159,6 @@ class TalkoraTheme {
         height: 1.45,
         color: mainText,
       ),
-      // iOS Subheadline (14pt Regular)
       bodyMedium: applyIos(
         fontTheme.bodyMedium,
         size: 14,
@@ -171,7 +167,6 @@ class TalkoraTheme {
         height: 1.4,
         color: secondaryText,
       ),
-      // iOS Footnote / Caption (12.5pt)
       bodySmall: applyIos(
         fontTheme.bodySmall,
         size: 12.5,
@@ -188,172 +183,178 @@ class TalkoraTheme {
   }
 
   static ThemeData light({required bool isArabic, String accentKey = 'blue'}) {
-    final accent = TalkoraColors.resolveAccent(accentKey, isDark: false);
-    final base = ThemeData.light(useMaterial3: true);
-    return base.copyWith(
-      platform: TargetPlatform.iOS,
-      scaffoldBackgroundColor: TalkoraColors.lightBackground,
-      cupertinoOverrideTheme: CupertinoThemeData(
-        brightness: Brightness.light,
-        primaryColor: accent,
+    final key = '$isArabic|$accentKey';
+    return _lightCache.putIfAbsent(key, () {
+      final accent = TalkoraColors.resolveAccent(accentKey, isDark: false);
+      final base = ThemeData.light(useMaterial3: true);
+      return base.copyWith(
+        platform: TargetPlatform.iOS,
         scaffoldBackgroundColor: TalkoraColors.lightBackground,
-        barBackgroundColor: TalkoraColors.lightSurface,
-      ),
-      colorScheme: ColorScheme.light(
-        primary: accent,
-        secondary: TalkoraColors.iosIndigo,
-        surface: TalkoraColors.lightSurface,
-        error: TalkoraColors.iosRed,
-        onPrimary: Colors.white,
-        onSurface: TalkoraColors.lightMainText,
-      ),
-      textTheme: _buildIosTextTheme(
-        base.textTheme,
-        isArabic,
-        TalkoraColors.lightMainText,
-        TalkoraColors.lightSecondaryText,
-      ),
-      pageTransitionsTheme: const PageTransitionsTheme(
-        builders: {
-          TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-        },
-      ),
-      cardTheme: CardThemeData(
-        color: TalkoraColors.lightSurface,
-        elevation: 0,
-        margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: TalkoraColors.lightSeparator.withValues(alpha: 0.35), width: 0.5),
+        cupertinoOverrideTheme: CupertinoThemeData(
+          brightness: Brightness.light,
+          primaryColor: accent,
+          scaffoldBackgroundColor: TalkoraColors.lightBackground,
+          barBackgroundColor: TalkoraColors.lightSurface,
         ),
-      ),
-      appBarTheme: AppBarTheme(
-        backgroundColor: TalkoraColors.lightBackground.withValues(alpha: 0.94),
-        foregroundColor: TalkoraColors.lightMainText,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: true,
-        titleTextStyle: TextStyle(
-          color: TalkoraColors.lightMainText,
-          fontSize: 17,
-          fontWeight: FontWeight.w600,
-          letterSpacing: isArabic ? 0 : -0.4,
+        colorScheme: ColorScheme.light(
+          primary: accent,
+          secondary: TalkoraColors.iosIndigo,
+          surface: TalkoraColors.lightSurface,
+          error: TalkoraColors.iosRed,
+          onPrimary: Colors.white,
+          onSurface: TalkoraColors.lightMainText,
         ),
-      ),
-      dividerTheme: const DividerThemeData(
-        color: TalkoraColors.lightSeparator,
-        thickness: 0.5,
-        space: 0.5,
-      ),
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          backgroundColor: accent,
-          foregroundColor: Colors.white,
-          minimumSize: const Size(0, 50),
+        textTheme: _buildIosTextTheme(
+          base.textTheme,
+          isArabic,
+          TalkoraColors.lightMainText,
+          TalkoraColors.lightSecondaryText,
+        ),
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          },
+        ),
+        cardTheme: CardThemeData(
+          color: TalkoraColors.lightSurface,
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: TalkoraColors.lightSeparator.withValues(alpha: 0.35), width: 0.5),
+          ),
         ),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: TalkoraColors.lightFill.withValues(alpha: 0.55),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+        appBarTheme: AppBarTheme(
+          backgroundColor: TalkoraColors.lightBackground.withValues(alpha: 0.94),
+          foregroundColor: TalkoraColors.lightMainText,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          centerTitle: true,
+          titleTextStyle: TextStyle(
+            color: TalkoraColors.lightMainText,
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            letterSpacing: isArabic ? 0 : -0.4,
+          ),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: accent, width: 1.5),
+        dividerTheme: const DividerThemeData(
+          color: TalkoraColors.lightSeparator,
+          thickness: 0.5,
+          space: 0.5,
         ),
-      ),
-    );
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            backgroundColor: accent,
+            foregroundColor: Colors.white,
+            minimumSize: const Size(0, 48),
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            textStyle: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600),
+          ),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: TalkoraColors.lightFill.withValues(alpha: 0.55),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: accent, width: 1.5),
+          ),
+        ),
+      );
+    });
   }
 
   static ThemeData dark({required bool isArabic, String accentKey = 'blue'}) {
-    final accent = TalkoraColors.resolveAccent(accentKey, isDark: true);
-    final base = ThemeData.dark(useMaterial3: true);
-    return base.copyWith(
-      platform: TargetPlatform.iOS,
-      scaffoldBackgroundColor: TalkoraColors.darkBackground,
-      cupertinoOverrideTheme: CupertinoThemeData(
-        brightness: Brightness.dark,
-        primaryColor: accent,
+    final key = '$isArabic|$accentKey';
+    return _darkCache.putIfAbsent(key, () {
+      final accent = TalkoraColors.resolveAccent(accentKey, isDark: true);
+      final base = ThemeData.dark(useMaterial3: true);
+      return base.copyWith(
+        platform: TargetPlatform.iOS,
         scaffoldBackgroundColor: TalkoraColors.darkBackground,
-        barBackgroundColor: TalkoraColors.darkSurface,
-      ),
-      colorScheme: ColorScheme.dark(
-        primary: accent,
-        secondary: TalkoraColors.iosDarkIndigo,
-        surface: TalkoraColors.darkSurface,
-        error: TalkoraColors.iosDarkRed,
-        onPrimary: Colors.white,
-        onSurface: TalkoraColors.darkText,
-      ),
-      textTheme: _buildIosTextTheme(
-        base.textTheme,
-        isArabic,
-        TalkoraColors.darkText,
-        TalkoraColors.darkSecondaryText,
-      ),
-      pageTransitionsTheme: const PageTransitionsTheme(
-        builders: {
-          TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-        },
-      ),
-      cardTheme: CardThemeData(
-        color: TalkoraColors.darkSurface,
-        elevation: 0,
-        margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: TalkoraColors.darkSeparator.withValues(alpha: 0.6), width: 0.5),
+        cupertinoOverrideTheme: CupertinoThemeData(
+          brightness: Brightness.dark,
+          primaryColor: accent,
+          scaffoldBackgroundColor: TalkoraColors.darkBackground,
+          barBackgroundColor: TalkoraColors.darkSurface,
         ),
-      ),
-      appBarTheme: AppBarTheme(
-        backgroundColor: TalkoraColors.darkBackground.withValues(alpha: 0.94),
-        foregroundColor: TalkoraColors.darkText,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: true,
-        titleTextStyle: TextStyle(
-          color: TalkoraColors.darkText,
-          fontSize: 17,
-          fontWeight: FontWeight.w600,
-          letterSpacing: isArabic ? 0 : -0.4,
+        colorScheme: ColorScheme.dark(
+          primary: accent,
+          secondary: TalkoraColors.iosDarkIndigo,
+          surface: TalkoraColors.darkSurface,
+          error: TalkoraColors.iosDarkRed,
+          onPrimary: Colors.white,
+          onSurface: TalkoraColors.darkText,
         ),
-      ),
-      dividerTheme: const DividerThemeData(
-        color: TalkoraColors.darkSeparator,
-        thickness: 0.5,
-        space: 0.5,
-      ),
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          backgroundColor: accent,
-          foregroundColor: Colors.white,
-          minimumSize: const Size(0, 50),
+        textTheme: _buildIosTextTheme(
+          base.textTheme,
+          isArabic,
+          TalkoraColors.darkText,
+          TalkoraColors.darkSecondaryText,
+        ),
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          },
+        ),
+        cardTheme: CardThemeData(
+          color: TalkoraColors.darkSurface,
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: TalkoraColors.darkSeparator.withValues(alpha: 0.6), width: 0.5),
+          ),
         ),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: TalkoraColors.darkFill,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+        appBarTheme: AppBarTheme(
+          backgroundColor: TalkoraColors.darkBackground.withValues(alpha: 0.94),
+          foregroundColor: TalkoraColors.darkText,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          centerTitle: true,
+          titleTextStyle: TextStyle(
+            color: TalkoraColors.darkText,
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            letterSpacing: isArabic ? 0 : -0.4,
+          ),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: accent, width: 1.5),
+        dividerTheme: const DividerThemeData(
+          color: TalkoraColors.darkSeparator,
+          thickness: 0.5,
+          space: 0.5,
         ),
-      ),
-    );
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            backgroundColor: accent,
+            foregroundColor: Colors.white,
+            minimumSize: const Size(0, 48),
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            textStyle: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600),
+          ),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: TalkoraColors.darkFill,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: accent, width: 1.5),
+          ),
+        ),
+      );
+    });
   }
 }

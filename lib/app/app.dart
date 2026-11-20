@@ -8,28 +8,44 @@ import 'package:talkora_ai/core/knowledge/github_knowledge_service.dart';
 import 'package:talkora_ai/core/knowledge/nimo_local_db_service.dart';
 import 'package:talkora_ai/core/storage/app_state_provider.dart';
 
-class TalkoraApp extends ConsumerWidget {
+class TalkoraApp extends ConsumerStatefulWidget {
   const TalkoraApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final profile = ref.watch(learnerProfileProvider);
-    final router = ref.watch(appRouterProvider);
-    // Warm up built-in offline DB + auto-inject all cached GitHub/API datasets immediately on launch
-    ref.watch(nimoLocalDbProvider);
-    ref.watch(githubKnowledgeProvider);
-    NimoSoundFx.enabled = profile.clickSoundEnabled;
-    NimoSoundFx.warmUp();
+  ConsumerState<TalkoraApp> createState() => _TalkoraAppState();
+}
 
-    final isArabic = profile.uiLocale == 'ar';
+class _TalkoraAppState extends ConsumerState<TalkoraApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Warm up built-in DB (in background isolate), GitHub datasets & sound effects ONCE without rebuilding MaterialApp
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(nimoLocalDbProvider.notifier).load();
+      ref.read(githubKnowledgeProvider);
+      NimoSoundFx.warmUp();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final uiLocale = ref.watch(learnerProfileProvider.select((s) => s.uiLocale));
+    final accentKey = ref.watch(learnerProfileProvider.select((s) => s.accentColorKey));
+    final themeMode = ref.watch(learnerProfileProvider.select((s) => s.themeMode));
+    final clickSound = ref.watch(learnerProfileProvider.select((s) => s.clickSoundEnabled));
+    final router = ref.watch(appRouterProvider);
+
+    NimoSoundFx.enabled = clickSound;
+    final isArabic = uiLocale == 'ar';
 
     return MaterialApp.router(
       title: 'Nimo',
       debugShowCheckedModeBanner: false,
-      theme: TalkoraTheme.light(isArabic: isArabic, accentKey: profile.accentColorKey),
-      darkTheme: TalkoraTheme.dark(isArabic: isArabic, accentKey: profile.accentColorKey),
-      themeMode: profile.themeMode,
-      locale: Locale(profile.uiLocale),
+      theme: TalkoraTheme.light(isArabic: isArabic, accentKey: accentKey),
+      darkTheme: TalkoraTheme.dark(isArabic: isArabic, accentKey: accentKey),
+      themeMode: themeMode,
+      locale: Locale(uiLocale),
       supportedLocales: const [Locale('en'), Locale('ar')],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,

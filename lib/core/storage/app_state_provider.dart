@@ -8,6 +8,12 @@ import 'package:talkora_ai/core/ai/universal_ai_service.dart';
 import 'package:talkora_ai/core/audio/sound_fx_service.dart';
 import 'package:talkora_ai/core/constants/api_config.dart';
 
+/// Preloaded SharedPreferences injected from main.dart for zero-latency synchronous hydration.
+final sharedPreferencesProvider = Provider<SharedPreferences?>((ref) => null);
+
+/// Optional prompt passed from Home Quick Ask or Database Screen to AI Chat Screen.
+final chatPrefillPromptProvider = StateProvider<String?>((ref) => null);
+
 class LearnerProfileState {
   final bool onboardingCompleted;
   final String displayName;
@@ -97,17 +103,22 @@ class LearnerProfileState {
 }
 
 class LearnerProfileNotifier extends StateNotifier<LearnerProfileState> {
-  LearnerProfileNotifier() : super(const LearnerProfileState()) {
-    _load();
+  final SharedPreferences? _preloadedPrefs;
+
+  LearnerProfileNotifier([this._preloadedPrefs])
+      : super(_hydrateSync(_preloadedPrefs)) {
+    if (_preloadedPrefs == null) {
+      _loadAsync();
+    }
   }
 
-  Future<void> _load() async {
+  static LearnerProfileState _hydrateSync(SharedPreferences? prefs) {
+    if (prefs == null) return const LearnerProfileState();
     try {
-      final prefs = await SharedPreferences.getInstance();
       final themeIdx = prefs.getInt('theme_mode') ?? ThemeMode.dark.index;
       final clickSound = prefs.getBool('click_sound_enabled') ?? true;
       NimoSoundFx.enabled = clickSound;
-      state = state.copyWith(
+      return LearnerProfileState(
         onboardingCompleted: prefs.getBool('onboarding_completed') ?? false,
         displayName: prefs.getString('display_name') ?? 'YOSSEF JOO',
         nativeLanguage: prefs.getString('native_language') ?? 'Arabic',
@@ -125,6 +136,18 @@ class LearnerProfileNotifier extends StateNotifier<LearnerProfileState> {
         serverBaseUrl: prefs.getString('server_base_url') ?? ApiConfig.defaultBaseUrl,
         xpPoints: prefs.getInt('xp_points') ?? 420,
       );
+    } catch (_) {
+      return const LearnerProfileState();
+    }
+  }
+
+  Future<SharedPreferences> _getPrefs() async =>
+      _preloadedPrefs ?? await SharedPreferences.getInstance();
+
+  Future<void> _loadAsync() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      state = _hydrateSync(prefs);
     } catch (_) {}
   }
 
@@ -148,7 +171,7 @@ class LearnerProfileNotifier extends StateNotifier<LearnerProfileState> {
       explanationLanguage: explanationLanguage,
     );
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await _getPrefs();
       await prefs.setBool('onboarding_completed', true);
       await prefs.setString('display_name', state.displayName);
       await prefs.setString('native_language', state.nativeLanguage);
@@ -163,7 +186,7 @@ class LearnerProfileNotifier extends StateNotifier<LearnerProfileState> {
   Future<void> setLocale(String langCode) async {
     state = state.copyWith(uiLocale: langCode);
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await _getPrefs();
       await prefs.setString('ui_locale', langCode);
     } catch (_) {}
   }
@@ -171,7 +194,7 @@ class LearnerProfileNotifier extends StateNotifier<LearnerProfileState> {
   Future<void> setThemeMode(ThemeMode mode) async {
     state = state.copyWith(themeMode: mode);
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await _getPrefs();
       await prefs.setInt('theme_mode', mode.index);
     } catch (_) {}
   }
@@ -179,7 +202,7 @@ class LearnerProfileNotifier extends StateNotifier<LearnerProfileState> {
   Future<void> setAccentColor(String key) async {
     state = state.copyWith(accentColorKey: key);
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await _getPrefs();
       await prefs.setString('accent_color_key', key);
     } catch (_) {}
   }
@@ -188,7 +211,7 @@ class LearnerProfileNotifier extends StateNotifier<LearnerProfileState> {
     NimoSoundFx.enabled = enabled;
     state = state.copyWith(clickSoundEnabled: enabled);
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await _getPrefs();
       await prefs.setBool('click_sound_enabled', enabled);
     } catch (_) {}
   }
@@ -196,7 +219,7 @@ class LearnerProfileNotifier extends StateNotifier<LearnerProfileState> {
   Future<void> setGlassIconAnimationEnabled(bool enabled) async {
     state = state.copyWith(glassIconAnimationEnabled: enabled);
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await _getPrefs();
       await prefs.setBool('glass_icon_anim_enabled', enabled);
     } catch (_) {}
   }
@@ -204,7 +227,7 @@ class LearnerProfileNotifier extends StateNotifier<LearnerProfileState> {
   Future<void> setEnglishLevel(String level) async {
     state = state.copyWith(englishLevel: level);
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await _getPrefs();
       await prefs.setString('english_level', level);
     } catch (_) {}
   }
@@ -212,7 +235,7 @@ class LearnerProfileNotifier extends StateNotifier<LearnerProfileState> {
   Future<void> setDailyTargetMinutes(int minutes) async {
     state = state.copyWith(dailyTargetMinutes: minutes);
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await _getPrefs();
       await prefs.setInt('daily_target_minutes', minutes);
     } catch (_) {}
   }
@@ -220,7 +243,7 @@ class LearnerProfileNotifier extends StateNotifier<LearnerProfileState> {
   Future<void> setMemoryEnabled(bool enabled) async {
     state = state.copyWith(memoryEnabled: enabled);
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await _getPrefs();
       await prefs.setBool('memory_enabled', enabled);
     } catch (_) {}
   }
@@ -228,7 +251,7 @@ class LearnerProfileNotifier extends StateNotifier<LearnerProfileState> {
   Future<void> setServerUrl(String url) async {
     state = state.copyWith(serverBaseUrl: url.trim());
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await _getPrefs();
       await prefs.setString('server_base_url', state.serverBaseUrl);
     } catch (_) {}
   }
@@ -256,7 +279,7 @@ class LearnerProfileNotifier extends StateNotifier<LearnerProfileState> {
   }
 }
 
-/// Persistent Universal Multi-Provider AI Settings State (Nimo v5.0 Ultra Smart Router).
+/// Persistent Universal Multi-Provider AI Settings State (Nimo v7.0 Apex).
 class AiSettingsState {
   final String activeProviderId;
   final Map<String, ProviderCredential> credentials;
@@ -281,7 +304,7 @@ class AiSettingsState {
     this.temperature = 0.7,
     this.maxTokens = 4096,
     this.customSystemPrompt =
-        'You are Nimo v5.0 Ultra — an ultra-intelligent personal AI assistant, principal programmer, realistic voice companion, and smart phone controller developed by YOSSEF JOO. '
+        'You are Nimo v7.0 Apex — an ultra-intelligent personal AI assistant, principal programmer, realistic voice companion, and smart phone controller developed by YOSSEF JOO. '
         'Answer deeply, accurately, and clearly in the user language (Arabic or English).',
     this.smartFallbackEnabled = true,
     this.deepThinkingEnabled = false,
@@ -306,9 +329,9 @@ class AiSettingsState {
         ? preset.defaultModel
         : storedModel;
     return ProviderCredential(
-      apiKey: stored?.apiKey ?? '',
+      apiKey: AiKeySanitizer.clean(stored?.apiKey ?? ''),
       model: effectiveModel,
-      baseUrl: (stored?.baseUrl.isNotEmpty ?? false) ? stored!.baseUrl : preset.defaultBaseUrl,
+      baseUrl: (stored?.baseUrl.trim().isNotEmpty ?? false) ? stored!.baseUrl.trim() : preset.defaultBaseUrl,
       discoveredModels: stored?.discoveredModels ?? const [],
     );
   }
@@ -317,12 +340,22 @@ class AiSettingsState {
   String get activeModel => credentialFor(activeProviderId).model;
   String get activeBaseUrl => credentialFor(activeProviderId).baseUrl;
 
-  bool get isConfigured => !activePreset.requiresApiKey || activeApiKey.trim().isNotEmpty;
+  bool get isConfigured => !activePreset.requiresApiKey || activeApiKey.isNotEmpty;
+
+  int get savedApiKeysCount {
+    int count = 0;
+    for (final p in AiProviderCatalog.all) {
+      if (p.requiresApiKey && AiKeySanitizer.clean(credentials[p.id]?.apiKey ?? '').isNotEmpty) {
+        count++;
+      }
+    }
+    return count;
+  }
 
   int get configuredProvidersCount {
     int count = 0;
     for (final p in AiProviderCatalog.all) {
-      if (!p.requiresApiKey || (credentials[p.id]?.apiKey.trim().isNotEmpty ?? false)) {
+      if (!p.requiresApiKey || AiKeySanitizer.clean(credentials[p.id]?.apiKey ?? '').isNotEmpty) {
         count++;
       }
     }
@@ -386,13 +419,18 @@ class AiSettingsNotifier extends StateNotifier<AiSettingsState> {
   static const _kNativeVoice = 'nimo_native_voice_v4';
   static const _kCustomImageModel = 'nimo_custom_image_model_v4';
 
-  AiSettingsNotifier() : super(const AiSettingsState()) {
-    _load();
+  final SharedPreferences? _preloadedPrefs;
+
+  AiSettingsNotifier([this._preloadedPrefs])
+      : super(_hydrateSync(_preloadedPrefs)) {
+    if (_preloadedPrefs == null) {
+      _loadAsync();
+    }
   }
 
-  Future<void> _load() async {
+  static AiSettingsState _hydrateSync(SharedPreferences? prefs) {
+    if (prefs == null) return const AiSettingsState();
     try {
-      final prefs = await SharedPreferences.getInstance();
       final activeId = prefs.getString(_kActiveProvider) ?? 'pollinations';
       final rawJson = prefs.getString(_kCredentialsMap);
       final Map<String, ProviderCredential> map = {};
@@ -401,7 +439,6 @@ class AiSettingsNotifier extends StateNotifier<AiSettingsState> {
         decoded.forEach((k, v) {
           if (v is Map<String, dynamic>) {
             var cred = ProviderCredential.fromJson(v);
-            // Auto-migrate legacy invalid v4 model IDs to real latest models
             if (AiProviderCatalog.isLegacyInvalidModel(cred.model)) {
               cred = cred.copyWith(model: AiProviderCatalog.byId(k).defaultModel);
             }
@@ -412,12 +449,12 @@ class AiSettingsNotifier extends StateNotifier<AiSettingsState> {
       final rawImgModel = prefs.getString(_kCustomImageModel) ?? '';
       final safeImgModel = AiProviderCatalog.isLegacyInvalidModel(rawImgModel) ? '' : rawImgModel;
 
-      state = state.copyWith(
+      return AiSettingsState(
         activeProviderId: activeId,
         credentials: map,
         temperature: prefs.getDouble(_kTemperature) ?? 0.7,
         maxTokens: prefs.getInt(_kMaxTokens) ?? 4096,
-        customSystemPrompt: prefs.getString(_kSystemPrompt) ?? state.customSystemPrompt,
+        customSystemPrompt: prefs.getString(_kSystemPrompt) ?? const AiSettingsState().customSystemPrompt,
         smartFallbackEnabled: prefs.getBool(_kSmartFallback) ?? true,
         deepThinkingEnabled: prefs.getBool(_kDeepThinking) ?? false,
         deviceControlEnabled: prefs.getBool(_kDeviceControl) ?? true,
@@ -425,17 +462,29 @@ class AiSettingsNotifier extends StateNotifier<AiSettingsState> {
         voiceSpeechRate: prefs.getDouble(_kVoiceRate) ?? 1.0,
         voiceLocale: prefs.getString(_kVoiceLocale) ?? 'ar-EG',
         voicePresetId: prefs.getString(_kVoicePreset) ?? 'auto_human',
-        elevenLabsApiKey: prefs.getString(_kElevenKey) ?? '',
+        elevenLabsApiKey: AiKeySanitizer.clean(prefs.getString(_kElevenKey) ?? ''),
         elevenLabsVoiceId: prefs.getString(_kElevenVoice) ?? '21m00Tcm4TlvDq8ikWAM',
         nativeVoiceName: prefs.getString(_kNativeVoice) ?? '',
         customImageModel: safeImgModel,
       );
+    } catch (_) {
+      return const AiSettingsState();
+    }
+  }
+
+  Future<SharedPreferences> _getPrefs() async =>
+      _preloadedPrefs ?? await SharedPreferences.getInstance();
+
+  Future<void> _loadAsync() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      state = _hydrateSync(prefs);
     } catch (_) {}
   }
 
   Future<void> _persist() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await _getPrefs();
       await prefs.setString(_kActiveProvider, state.activeProviderId);
       final encoded = jsonEncode(
         state.credentials.map((k, v) => MapEntry(k, v.toJson())),
@@ -451,7 +500,7 @@ class AiSettingsNotifier extends StateNotifier<AiSettingsState> {
       await prefs.setDouble(_kVoiceRate, state.voiceSpeechRate);
       await prefs.setString(_kVoiceLocale, state.voiceLocale);
       await prefs.setString(_kVoicePreset, state.voicePresetId);
-      await prefs.setString(_kElevenKey, state.elevenLabsApiKey);
+      await prefs.setString(_kElevenKey, AiKeySanitizer.clean(state.elevenLabsApiKey));
       await prefs.setString(_kElevenVoice, state.elevenLabsVoiceId);
       await prefs.setString(_kNativeVoice, state.nativeVoiceName);
       await prefs.setString(_kCustomImageModel, state.customImageModel);
@@ -469,16 +518,20 @@ class AiSettingsNotifier extends StateNotifier<AiSettingsState> {
     required String model,
     required String baseUrl,
     List<String>? discoveredModels,
+    bool makeActive = true,
   }) async {
     final existing = state.credentials[providerId];
     final updated = Map<String, ProviderCredential>.from(state.credentials);
     updated[providerId] = ProviderCredential(
-      apiKey: apiKey.trim(),
+      apiKey: AiKeySanitizer.clean(apiKey),
       model: model.trim(),
       baseUrl: baseUrl.trim(),
       discoveredModels: discoveredModels ?? existing?.discoveredModels ?? const [],
     );
-    state = state.copyWith(activeProviderId: providerId, credentials: updated);
+    state = state.copyWith(
+      activeProviderId: makeActive ? providerId : state.activeProviderId,
+      credentials: updated,
+    );
     await _persist();
   }
 
@@ -509,7 +562,7 @@ class AiSettingsNotifier extends StateNotifier<AiSettingsState> {
       voiceSpeechRate: voiceSpeechRate,
       voiceLocale: voiceLocale,
       voicePresetId: voicePresetId,
-      elevenLabsApiKey: elevenLabsApiKey,
+      elevenLabsApiKey: elevenLabsApiKey != null ? AiKeySanitizer.clean(elevenLabsApiKey) : null,
       elevenLabsVoiceId: elevenLabsVoiceId,
       nativeVoiceName: nativeVoiceName,
       customImageModel: customImageModel,
@@ -527,11 +580,11 @@ class AiSettingsNotifier extends StateNotifier<AiSettingsState> {
 }
 
 final learnerProfileProvider = StateNotifierProvider<LearnerProfileNotifier, LearnerProfileState>(
-  (ref) => LearnerProfileNotifier(),
+  (ref) => LearnerProfileNotifier(ref.watch(sharedPreferencesProvider)),
 );
 
 final aiSettingsProvider = StateNotifierProvider<AiSettingsNotifier, AiSettingsState>(
-  (ref) => AiSettingsNotifier(),
+  (ref) => AiSettingsNotifier(ref.watch(sharedPreferencesProvider)),
 );
 
 final universalAiServiceProvider = Provider<UniversalAiService>(

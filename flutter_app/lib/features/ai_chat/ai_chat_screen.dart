@@ -15,6 +15,7 @@ import 'package:talkora_ai/core/knowledge/github_knowledge_service.dart';
 import 'package:talkora_ai/core/knowledge/nimo_local_db_service.dart';
 import 'package:talkora_ai/core/storage/app_state_provider.dart';
 import 'package:talkora_ai/core/widgets/ios_components.dart';
+import 'package:talkora_ai/core/widgets/nimo_animations.dart';
 import 'package:talkora_ai/core/widgets/nimo_chat_bubble.dart';
 import 'package:talkora_ai/core/widgets/nimo_clipboard_bar.dart';
 import 'package:talkora_ai/features/coding_lab/coding_lab_screen.dart';
@@ -37,8 +38,34 @@ class _TutorPersona {
   });
 }
 
-/// Nimo v5.0 Ultra — Supercharged AI Chat Studio with Unified Injected GitHub/API RAG,
-/// Key-Aware Inline Image Generation, Live Coding Lab Handoff & Auto-Latest Model Routing.
+class _ChatSession {
+  final String id;
+  String title;
+  final List<AiChatMessage> messages;
+
+  _ChatSession({required this.id, required this.title, required this.messages});
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'messages': messages.map((m) => m.toJson()).toList(),
+      };
+
+  factory _ChatSession.fromJson(Map<String, dynamic> json) {
+    final rawMsgs = (json['messages'] as List<dynamic>?) ?? const [];
+    return _ChatSession(
+      id: (json['id'] ?? 'default').toString(),
+      title: (json['title'] ?? 'محادثة جديدة').toString(),
+      messages: [
+        for (final item in rawMsgs)
+          if (item is Map<String, dynamic>) AiChatMessage.fromJson(item),
+      ],
+    );
+  }
+}
+
+/// Nimo v7.0 Apex — Multi-Session AI Chat Studio with Live Thinking Wave Animation,
+/// In-Chat Search, Auto Self-Healing Model Persistence & Quick Key Access.
 class AiChatScreen extends ConsumerStatefulWidget {
   const AiChatScreen({super.key});
 
@@ -47,17 +74,18 @@ class AiChatScreen extends ConsumerStatefulWidget {
 }
 
 class _AiChatScreenState extends ConsumerState<AiChatScreen> {
-  static const _kHistoryKey = 'nimo_ai_chat_history_v4';
+  static const _kSessionsKey = 'nimo_ai_chat_sessions_v7';
+  static const _kLegacyHistoryKey = 'nimo_ai_chat_history_v4';
 
   static const List<_TutorPersona> _personas = [
     _TutorPersona(
       id: 'general',
-      nameEn: 'Nimo Ultra',
+      nameEn: 'Nimo Apex',
       nameAr: 'نيمو الخارق',
       icon: CupertinoIcons.sparkles,
       color: TalkoraColors.iosBlue,
       prompt:
-          'You are Nimo v5.0 Ultra developed by YOSSEF JOO. You are an ultra-intelligent, thorough, accurate assistant powered by a unified knowledge base and injected GitHub/API datasets. Answer deeply, clearly, and practically in the user language (Arabic or English). Format code in fenced code blocks.',
+          'You are Nimo v7.0 Apex developed by YOSSEF JOO. You are an ultra-intelligent, thorough, accurate assistant powered by a unified knowledge base and GitHub/API datasets. Answer deeply, clearly, and practically in the user language (Arabic or English). Format code in fenced code blocks.',
     ),
     _TutorPersona(
       id: 'coder',
@@ -116,10 +144,28 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
   ];
 
   final TextEditingController _inputCtrl = TextEditingController();
+  final TextEditingController _chatSearchCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
-  final List<AiChatMessage> _messages = [];
+
+  final List<_ChatSession> _sessions = [];
+  String _activeSessionId = 'default';
   String _personaId = 'general';
   bool _isSending = false;
+  bool _showSearchBar = false;
+  String _searchFilter = '';
+
+  _ChatSession get _currentSession {
+    if (_sessions.isEmpty) {
+      _sessions.add(_ChatSession(id: 'default', title: 'المحادثة الرئيسية', messages: []));
+      _activeSessionId = 'default';
+    }
+    return _sessions.firstWhere(
+      (s) => s.id == _activeSessionId,
+      orElse: () => _sessions.first,
+    );
+  }
+
+  List<AiChatMessage> get _messages => _currentSession.messages;
 
   _TutorPersona get _activePersona =>
       _personas.firstWhere((p) => p.id == _personaId, orElse: () => _personas.first);
@@ -127,40 +173,158 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
   @override
   void initState() {
     super.initState();
-    _loadHistory();
+    _loadSessions();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _consumePrefillIfAny());
+  }
+
+  void _consumePrefillIfAny() {
+    if (!mounted) return;
+    final prefill = ref.read(chatPrefillPromptProvider);
+    if (prefill != null && prefill.trim().isNotEmpty) {
+      ref.read(chatPrefillPromptProvider.notifier).state = null;
+      _sendMessage(prefill);
+    }
   }
 
   @override
   void dispose() {
     _inputCtrl.dispose();
+    _chatSearchCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _loadHistory() async {
+  Future<void> _loadSessions() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_kHistoryKey);
-      if (raw != null && raw.isNotEmpty) {
-        final list = jsonDecode(raw) as List<dynamic>;
-        setState(() {
-          _messages.clear();
-          for (final item in list) {
-            if (item is Map<String, dynamic>) {
-              _messages.add(AiChatMessage.fromJson(item));
-            }
+      final prefs = ref.read(sharedPreferencesProvider) ?? await SharedPreferences.getInstance();
+      final rawSessions = prefs.getString(_kSessionsKey);
+      if (rawSessions != null && rawSessions.isNotEmpty) {
+        final decoded = jsonDecode(rawSessions) as List<dynamic>;
+        final loaded = <_ChatSession>[];
+        for (final item in decoded) {
+          if (item is Map<String, dynamic>) {
+            loaded.add(_ChatSession.fromJson(item));
           }
+        }
+        if (loaded.isNotEmpty && mounted) {
+          setState(() {
+            _sessions
+              ..clear()
+              ..addAll(loaded);
+            _activeSessionId = _sessions.first.id;
+          });
+          return;
+        }
+      }
+      // Migrate legacy single-chat history seamlessly
+      final legacyRaw = prefs.getString(_kLegacyHistoryKey);
+      if (legacyRaw != null && legacyRaw.isNotEmpty && mounted) {
+        final list = jsonDecode(legacyRaw) as List<dynamic>;
+        final msgs = <AiChatMessage>[];
+        for (final item in list) {
+          if (item is Map<String, dynamic>) msgs.add(AiChatMessage.fromJson(item));
+        }
+        setState(() {
+          _sessions
+            ..clear()
+            ..add(_ChatSession(id: 'default', title: 'المحادثة الرئيسية', messages: msgs));
+          _activeSessionId = 'default';
         });
       }
     } catch (_) {}
   }
 
-  Future<void> _saveHistory() async {
+  Future<void> _saveSessions() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final trimmed = _messages.length > 60 ? _messages.sublist(_messages.length - 60) : _messages;
-      await prefs.setString(_kHistoryKey, jsonEncode(trimmed.map((m) => m.toJson()).toList()));
+      final prefs = ref.read(sharedPreferencesProvider) ?? await SharedPreferences.getInstance();
+      final capped = _sessions.take(15).map((s) {
+        final trimmed = s.messages.length > 60 ? s.messages.sublist(s.messages.length - 60) : s.messages;
+        return _ChatSession(id: s.id, title: s.title, messages: trimmed).toJson();
+      }).toList();
+      await prefs.setString(_kSessionsKey, jsonEncode(capped));
     } catch (_) {}
+  }
+
+  void _createNewSession(bool isAr) {
+    NimoSoundFx.pop();
+    final id = 'chat_${DateTime.now().millisecondsSinceEpoch}';
+    setState(() {
+      _sessions.insert(
+        0,
+        _ChatSession(
+          id: id,
+          title: isAr ? 'محادثة جديدة' : 'New Chat',
+          messages: [],
+        ),
+      );
+      _activeSessionId = id;
+    });
+    _saveSessions();
+  }
+
+  void _showSessionsSheet(bool isAr) {
+    NimoSoundFx.click();
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  isAr ? 'المحادثات (${_sessions.length})' : 'Conversations (${_sessions.length})',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _createNewSession(isAr);
+                  },
+                  icon: const Icon(CupertinoIcons.add, size: 16),
+                  label: Text(isAr ? 'جديدة' : 'New'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            for (final s in _sessions)
+              ListTile(
+                leading: IosIconBadge(
+                  icon: CupertinoIcons.chat_bubble_text_fill,
+                  color: s.id == _activeSessionId ? Theme.of(context).colorScheme.primary : TalkoraColors.iosIndigo,
+                  size: 34,
+                ),
+                title: Text(s.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text(isAr ? '${s.messages.length} رسالة' : '${s.messages.length} messages'),
+                trailing: _sessions.length > 1
+                    ? IconButton(
+                        icon: const Icon(CupertinoIcons.trash, size: 18, color: TalkoraColors.iosRed),
+                        onPressed: () {
+                          setState(() {
+                            _sessions.removeWhere((x) => x.id == s.id);
+                            if (_activeSessionId == s.id && _sessions.isNotEmpty) {
+                              _activeSessionId = _sessions.first.id;
+                            }
+                          });
+                          _saveSessions();
+                          Navigator.pop(ctx);
+                        },
+                      )
+                    : null,
+                onTap: () {
+                  NimoSoundFx.click();
+                  setState(() => _activeSessionId = s.id);
+                  Navigator.pop(ctx);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _scrollToBottom() {
@@ -168,8 +332,8 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
       if (_scrollCtrl.hasClients) {
         _scrollCtrl.animateTo(
           _scrollCtrl.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 240),
-          curve: Curves.easeOut,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
         );
       }
     });
@@ -181,9 +345,14 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
 
     NimoSoundFx.pop();
     _inputCtrl.clear();
+    final session = _currentSession;
+    if (session.messages.isEmpty) {
+      session.title = text.length > 34 ? '${text.substring(0, 34)}...' : text;
+    }
+
     final userMsg = AiChatMessage(role: 'user', content: text, timestamp: DateTime.now());
     setState(() {
-      _messages.add(userMsg);
+      session.messages.add(userMsg);
       _isSending = true;
     });
     _scrollToBottom();
@@ -211,12 +380,12 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
           );
       if (!mounted) return;
       setState(() {
-        _messages.add(
+        session.messages.add(
           AiChatMessage(
             role: 'assistant',
             content: imgRes.success
                 ? (isAr
-                    ? 'تم توليد الصورة بنجاح عبر ${imgRes.item?.engine ?? 'Nimo Image Pro'}! يمكنك التعديل والحفظ بدقة أعلى من استوديو الصور.'
+                    ? 'تم توليد الصورة بنجاح عبر ${imgRes.item?.engine ?? 'Nimo Image Pro'}!'
                     : 'Image generated via ${imgRes.item?.engine ?? 'Nimo Image Pro'}!')
                 : (isAr ? 'تعذّر توليد الصورة: ${imgRes.error}' : 'Image error: ${imgRes.error}'),
             timestamp: DateTime.now(),
@@ -228,7 +397,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
         );
         _isSending = false;
       });
-      await _saveHistory();
+      await _saveSessions();
       _scrollToBottom();
       return;
     }
@@ -238,7 +407,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
       final instant = await executor.tryInstantLocalCommand(text, isArabic: isAr);
       if (instant != null && mounted) {
         setState(() {
-          _messages.add(
+          session.messages.add(
             AiChatMessage(
               role: 'assistant',
               content: instant.cleanReply,
@@ -250,13 +419,13 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
           );
           _isSending = false;
         });
-        await _saveHistory();
+        await _saveSessions();
         _scrollToBottom();
         return;
       }
     }
 
-    // 3. Build unified RAG context from Nimo 4,300+ Built-in DB + ALL Injected GitHub/API Datasets
+    // 3. Build unified RAG context
     final ghState = ref.read(githubKnowledgeProvider);
     final unifiedRag = ghState.ragEnabled
         ? ref.read(nimoLocalDbProvider.notifier).buildOfflineRagContext(text, limit: 6)
@@ -271,7 +440,9 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
       sysPrompt.writeln('\n${AiToolExecutor.systemToolPrompt}');
     }
 
-    final recentContext = _messages.length > 18 ? _messages.sublist(_messages.length - 18) : _messages;
+    final recentContext = session.messages.length > 18
+        ? session.messages.sublist(session.messages.length - 18)
+        : session.messages;
     final result = await aiService.sendChat(
       settings: aiSettings,
       messages: recentContext,
@@ -280,6 +451,22 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
     );
 
     if (!mounted) return;
+
+    // Auto-persist self-healed model on active provider so subsequent messages are instant!
+    if (result.success &&
+        !result.usedFallback &&
+        result.providerId == aiSettings.activeProviderId &&
+        result.modelName.isNotEmpty &&
+        result.modelName != aiSettings.activeModel) {
+      final cred = aiSettings.credentialFor(aiSettings.activeProviderId);
+      ref.read(aiSettingsProvider.notifier).saveProviderConfig(
+            providerId: aiSettings.activeProviderId,
+            apiKey: cred.apiKey,
+            model: result.modelName,
+            baseUrl: cred.baseUrl,
+            makeActive: false,
+          );
+    }
 
     String replyText;
     String? actionBadge;
@@ -293,18 +480,18 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
       replyText = outcome.cleanReply;
       actionBadge = outcome.actionBadge ??
           (combinedRag.isNotEmpty
-              ? (isAr ? 'مدعوم بقواعد Nimo و GitHub المحقونة' : 'Unified DB + GitHub RAG')
+              ? (isAr ? 'مدعوم بقاعدة بيانات Nimo' : 'Nimo Knowledge RAG')
               : null);
       imageUrl = outcome.generatedImageUrl;
-      modelBadge = '${result.providerName} • ${result.modelName}';
+      modelBadge = '${result.providerName} • ${result.modelName} (${result.latencyMs}ms)';
       ref.read(learnerProfileProvider.notifier).addXp(10);
     } else {
       final offlineHits = ref.read(nimoLocalDbProvider.notifier).search(text, limit: 4);
       if (offlineHits.isNotEmpty) {
         final buf = StringBuffer(
           isAr
-              ? 'إجابة فورية من قاعدة بيانات Nimo الموحدة (${ref.read(nimoLocalDbProvider).totalRecords} سجل):\n\n'
-              : 'Instant answer from Nimo Unified Offline DB:\n\n',
+              ? 'إجابة فورية من قاعدة بيانات Nimo (${ref.read(nimoLocalDbProvider).totalRecords} سجل):\n\n'
+              : 'Instant answer from Nimo Offline DB:\n\n',
         );
         for (final h in offlineHits) {
           buf.writeln('**${h.title}**\n${h.body}\n');
@@ -314,8 +501,8 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
         modelBadge = 'Nimo Local Engine';
       } else if (result.error == 'MISSING_API_KEY') {
         replyText = isAr
-            ? 'لم تقم بإضافة مفتاح API لـ ${aiSettings.activePreset.name} بعد. الصق مفتاحك في الإعدادات للربط بأحدث موديل تلقائياً، أو اختر Nimo Free Cloud AI للعمل مجاناً!'
-            : 'No API key for ${aiSettings.activePreset.name}. Paste your key in Settings to auto-bind the latest model, or select Nimo Free Cloud AI!';
+            ? 'لم تقم بإضافة مفتاح API لـ ${aiSettings.activePreset.name} بعد. اضغط على أيقونة الإعدادات بالأعلى للصق مفتاحك أو اختيار Nimo Free Cloud AI.'
+            : 'No API key for ${aiSettings.activePreset.name}. Tap Settings above to paste your key or switch to Nimo Free Cloud AI.';
       } else {
         replyText = isAr
             ? 'تعذّر الاتصال بالنموذج (${result.providerName}):\n${result.error}'
@@ -324,7 +511,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
     }
 
     setState(() {
-      _messages.add(
+      session.messages.add(
         AiChatMessage(
           role: 'assistant',
           content: replyText,
@@ -332,20 +519,22 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
           modelUsed: modelBadge,
           actionBadge: actionBadge,
           imageUrl: imageUrl,
+          latencyMs: result.latencyMs,
         ),
       );
       _isSending = false;
     });
-    await _saveHistory();
+    await _saveSessions();
     _scrollToBottom();
   }
 
   void _regenerateAt(int assistantIdx) {
     if (_isSending || assistantIdx <= 0) return;
+    final msgs = _messages;
     for (int i = assistantIdx - 1; i >= 0; i--) {
-      if (_messages[i].role == 'user') {
-        final prompt = _messages[i].content;
-        setState(() => _messages.removeRange(i, _messages.length));
+      if (msgs[i].role == 'user') {
+        final prompt = msgs[i].content;
+        setState(() => msgs.removeRange(i, msgs.length));
         _sendMessage(prompt);
         return;
       }
@@ -355,7 +544,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
   void _exportChat() {
     if (_messages.isEmpty) return;
     NimoSoundFx.click();
-    final buf = StringBuffer('=== Nimo v5.0 Ultra Chat Export ===\n\n');
+    final buf = StringBuffer('=== Nimo v7.0 Apex Chat Export ===\n\n');
     for (final m in _messages) {
       buf.writeln('${m.role == 'user' ? 'User' : 'Nimo'}: ${m.content}\n');
     }
@@ -381,7 +570,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    isAr ? 'تبديل سريع لأحدث الموديلات' : 'Quick Model Switcher',
+                    isAr ? 'تبديل سريع للمزود والنموذج' : 'Quick Model Switcher',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   TextButton(
@@ -398,7 +587,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
               ...AiProviderCatalog.all.map((p) {
                 final active = p.id == ai.activeProviderId;
                 final hasKey = !p.requiresApiKey ||
-                    (ai.credentials[p.id]?.apiKey.trim().isNotEmpty ?? false);
+                    AiKeySanitizer.clean(ai.credentials[p.id]?.apiKey ?? '').isNotEmpty;
                 final model = ai.credentialFor(p.id).model;
 
                 return ListTile(
@@ -432,6 +621,13 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // React to prefill prompts pushed from Home Quick Ask or Database Screen
+    ref.listen<String?>(chatPrefillPromptProvider, (_, next) {
+      if (next != null && next.trim().isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _consumePrefillIfAny());
+      }
+    });
+
     final ai = ref.watch(aiSettingsProvider);
     final gh = ref.watch(githubKnowledgeProvider);
     final localDb = ref.watch(nimoLocalDbProvider);
@@ -440,13 +636,24 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
     final isDark = theme.brightness == Brightness.dark;
     final totalRecords = localDb.totalRecords;
 
+    final displayedMessages = _searchFilter.isEmpty
+        ? _messages
+        : _messages
+            .where((m) => m.content.toLowerCase().contains(_searchFilter.toLowerCase()))
+            .toList();
+
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          tooltip: isAr ? 'المحادثات' : 'Chats',
+          icon: const Icon(CupertinoIcons.square_list, size: 21),
+          onPressed: () => _showSessionsSheet(isAr),
+        ),
         title: GestureDetector(
           onTap: _showQuickModelSwitcher,
           child: Column(
             children: [
-              Text(isAr ? 'محادثة Nimo v5.0' : 'Nimo AI Studio', style: theme.textTheme.titleMedium),
+              Text(isAr ? 'محادثة Nimo v7.0' : 'Nimo AI Studio', style: theme.textTheme.titleMedium),
               const SizedBox(height: 2),
               IosStatusPill(
                 label: '${ai.activePreset.shortName} • ${ai.activeModel}',
@@ -457,21 +664,26 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: isAr ? 'مشاركة المحادثة' : 'Export Chat',
-            icon: const Icon(CupertinoIcons.share, size: 20),
-            onPressed: _exportChat,
-          ),
-          IconButton(
-            tooltip: isAr ? 'مسح المحادثة' : 'Clear Chat',
-            icon: const Icon(CupertinoIcons.trash, size: 20),
+            tooltip: isAr ? 'بحث في المحادثة' : 'Search Chat',
+            icon: Icon(_showSearchBar ? CupertinoIcons.xmark : CupertinoIcons.search, size: 19),
             onPressed: () {
               NimoSoundFx.click();
-              setState(() => _messages.clear());
-              _saveHistory();
+              setState(() {
+                _showSearchBar = !_showSearchBar;
+                if (!_showSearchBar) {
+                  _chatSearchCtrl.clear();
+                  _searchFilter = '';
+                }
+              });
             },
           ),
           IconButton(
-            tooltip: isAr ? 'إعدادات API' : 'API Settings',
+            tooltip: isAr ? 'مشاركة المحادثة' : 'Export Chat',
+            icon: const Icon(CupertinoIcons.share, size: 19),
+            onPressed: _exportChat,
+          ),
+          IconButton(
+            tooltip: isAr ? 'إعدادات المفاتيح' : 'API Settings',
             icon: const Icon(CupertinoIcons.slider_horizontal_3, size: 20),
             onPressed: () {
               NimoSoundFx.click();
@@ -482,6 +694,21 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
       ),
       body: Column(
         children: [
+          if (_showSearchBar)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 4, 14, 6),
+              child: TextField(
+                controller: _chatSearchCtrl,
+                autofocus: true,
+                onChanged: (v) => setState(() => _searchFilter = v.trim()),
+                decoration: InputDecoration(
+                  hintText: isAr ? 'ابحث داخل رسائل هذه المحادثة...' : 'Search messages...',
+                  prefixIcon: const Icon(CupertinoIcons.search, size: 18),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+            ),
+
           SizedBox(
             height: 44,
             child: ListView.separated(
@@ -539,20 +766,17 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                 ),
                 const SizedBox(width: 6),
                 ActionChip(
-                  avatar: const Icon(CupertinoIcons.play_fill, size: 13),
-                  label: Text(isAr ? 'مختبر ومعاينة الكود' : 'Code Lab', style: const TextStyle(fontSize: 11.5)),
-                  onPressed: () {
-                    NimoSoundFx.click();
-                    context.push('/coding-lab');
-                  },
+                  avatar: const Icon(CupertinoIcons.add, size: 14),
+                  label: Text(isAr ? 'محادثة جديدة' : 'New Chat', style: const TextStyle(fontSize: 11.5)),
+                  onPressed: () => _createNewSession(isAr),
                 ),
                 const SizedBox(width: 6),
                 ActionChip(
-                  avatar: const Icon(CupertinoIcons.photo_fill, size: 14),
-                  label: Text(isAr ? 'استوديو الصور' : 'Image Studio', style: const TextStyle(fontSize: 11.5)),
+                  avatar: const Icon(CupertinoIcons.play_fill, size: 13),
+                  label: Text(isAr ? 'مختبر الكود' : 'Code Lab', style: const TextStyle(fontSize: 11.5)),
                   onPressed: () {
                     NimoSoundFx.click();
-                    context.push('/image-studio');
+                    context.push('/coding-lab');
                   },
                 ),
               ],
@@ -560,7 +784,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
           ),
 
           Expanded(
-            child: _messages.isEmpty
+            child: displayedMessages.isEmpty
                 ? _EmptyStudioView(
                     persona: _activePersona,
                     isAr: isAr,
@@ -570,9 +794,9 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                 : ListView.builder(
                     controller: _scrollCtrl,
                     padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
-                    itemCount: _messages.length + (_isSending ? 1 : 0),
+                    itemCount: displayedMessages.length + (_isSending ? 1 : 0),
                     itemBuilder: (context, index) {
-                      if (_isSending && index == _messages.length) {
+                      if (_isSending && index == displayedMessages.length) {
                         return Align(
                           alignment: AlignmentDirectional.centerStart,
                           child: Container(
@@ -585,10 +809,10 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const CupertinoActivityIndicator(),
+                                NimoThinkingWave(color: theme.colorScheme.primary),
                                 const SizedBox(width: 10),
                                 Text(
-                                  isAr ? 'Nimo يفكر ويحلل قواعد البيانات...' : 'Nimo is thinking...',
+                                  isAr ? 'Nimo يفكر الآن...' : 'Nimo is thinking...',
                                   style: theme.textTheme.bodySmall,
                                 ),
                               ],
@@ -597,7 +821,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                         );
                       }
 
-                      final msg = _messages[index];
+                      final msg = displayedMessages[index];
                       return NimoChatBubble(
                         message: msg,
                         isAr: isAr,
@@ -638,7 +862,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   IconButton(
-                    tooltip: isAr ? 'التحدث الصوتي بالمفتاح' : 'Key-Powered Live Voice',
+                    tooltip: isAr ? 'التحدث الصوتي' : 'Live Voice',
                     icon: Icon(CupertinoIcons.mic_circle_fill, color: theme.colorScheme.primary, size: 32),
                     onPressed: () {
                       NimoSoundFx.click();
@@ -663,8 +887,8 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                       onSubmitted: (_) => _sendMessage(),
                       decoration: InputDecoration(
                         hintText: isAr
-                            ? 'اسأل Nimo أي شيء، أو اطلب كوداً للمعاينة، أو اكتب: ارسم لي...'
-                            : 'Ask Nimo anything, build code to preview, or /image ...',
+                            ? 'اسأل Nimo أي شيء، أو اطلب كوداً، أو اكتب: ارسم لي...'
+                            : 'Ask Nimo anything, build code, or /image ...',
                         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(22),
@@ -680,6 +904,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                     child: FilledButton(
                       style: FilledButton.styleFrom(
                         padding: EdgeInsets.zero,
+                        minimumSize: const Size(42, 42),
                         shape: const CircleBorder(),
                       ),
                       onPressed: _isSending ? null : _sendMessage,
@@ -716,21 +941,23 @@ class _EmptyStudioView extends StatelessWidget {
         ? [
             'اكتب لي صفحة HTML و CSS احترافية لآلة حاسبة تفاعلية لأعاينها في المختبر',
             'ارسم لي مدينة مستقبلية في القاهرة وقت الغروب بدقة 8K',
-            'اقترح لي أفضل APIs مجانية من مستودعات GitHub لبناء تطبيق ذكي',
-            'اكتب لي كود Flutter نظيف مع Riverpod و GoRouter',
+            'اقترح لي أفضل APIs مجانية لبناء تطبيق ذكي',
+            'ضع لي خطة عملية لزيادة الإنتاجية وتنظيم اليوم',
           ]
         : [
             'Build an interactive HTML/CSS/JS calculator page I can preview in Coding Lab',
             '/image futuristic Cairo skyline at sunset 8k cinematic',
             'Suggest the best free public APIs for building a smart mobile app',
-            'Write clean Flutter Riverpod architecture code',
+            'Create a practical daily productivity plan',
           ];
 
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
         const SizedBox(height: 10),
-        Center(child: IosIconBadge(icon: persona.icon, color: persona.color, size: 60)),
+        NimoEntrance(
+          child: Center(child: IosIconBadge(icon: persona.icon, color: persona.color, size: 60)),
+        ),
         const SizedBox(height: 12),
         Text(
           isAr ? persona.nameAr : persona.nameEn,
@@ -740,26 +967,28 @@ class _EmptyStudioView extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           isAr
-              ? 'مدعوم بـ $totalRecords سجل معرفي موحد + حقن GitHub/APIs + أحدث موديل تلقائياً'
-              : 'Powered by $totalRecords unified records + GitHub/API injection + auto-latest models',
+              ? 'مدعوم بـ $totalRecords سجل معرفي + أحدث موديلات AI'
+              : 'Powered by $totalRecords records + latest AI models',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium,
         ),
         const SizedBox(height: 18),
-        ...starters.map(
-          (prompt) => Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: NimoGlassTap(
-              onTap: () => onQuickPrompt(prompt),
-              child: Card(
-                child: ListTile(
-                  title: Text(prompt, style: theme.textTheme.bodyLarge?.copyWith(fontSize: 14.5)),
-                  trailing: Icon(CupertinoIcons.arrow_up_circle_fill, color: theme.colorScheme.primary),
+        for (int i = 0; i < starters.length; i++)
+          NimoEntrance(
+            delay: Duration(milliseconds: 50 * (i + 1)),
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: NimoGlassTap(
+                onTap: () => onQuickPrompt(starters[i]),
+                child: Card(
+                  child: ListTile(
+                    title: Text(starters[i], style: theme.textTheme.bodyLarge?.copyWith(fontSize: 14.5)),
+                    trailing: Icon(CupertinoIcons.arrow_up_circle_fill, color: theme.colorScheme.primary),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
       ],
     );
   }

@@ -2,6 +2,52 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:talkora_ai/app/theme/app_theme.dart';
 
+/// Bulletproof API Key Sanitizer & Formatter.
+/// Strips invisible Unicode RTL/LTR marks (\u200B-\u200F, \uFEFF), newlines, quotes,
+/// spaces, and accidental "Bearer " or "API_KEY=" prefixes that cause HTTP header crashes!
+class AiKeySanitizer {
+  const AiKeySanitizer._();
+
+  static final RegExp _prefixRe = RegExp(
+    r"""^(?:bearer\s+|api[_-]?key\s*[:=]\s*|token\s*[:=]\s*)""",
+    caseSensitive: false,
+  );
+  // Keep only printable visible ASCII characters (0x21..0x7E) — safe for all HTTP headers
+  static final RegExp _nonAsciiHeaderSafeRe = RegExp(r"""[^\x21-\x7E]""");
+
+  /// Cleans any pasted API key so it is 100% valid for HTTP headers and URLs.
+  static String clean(String raw) {
+    var s = raw.trim();
+    if (s.isEmpty) return '';
+    // Strip surrounding quotes/backticks if pasted from JSON or code
+    while (s.length >= 2 &&
+        ((s.startsWith('"') && s.endsWith('"')) ||
+            (s.startsWith("'") && s.endsWith("'")) ||
+            (s.startsWith('`') && s.endsWith('`')))) {
+      s = s.substring(1, s.length - 1).trim();
+    }
+    s = s.replaceFirst(_prefixRe, '').trim();
+    // Strip invisible RTL/LTR marks, zero-width spaces, newlines, tabs, and non-ASCII junk
+    s = s.replaceAll(_nonAsciiHeaderSafeRe, '');
+    return s;
+  }
+
+  /// Returns a safe masked preview like `AIzaSy...x9kQ` for UI display.
+  static String mask(String raw) {
+    final k = clean(raw);
+    if (k.isEmpty) return '';
+    if (k.length <= 10) return '${k.substring(0, 3)}***';
+    return '${k.substring(0, 6)}...${k.substring(k.length - 4)}';
+  }
+
+  /// Checks if a clipboard string looks like a real AI API key.
+  static bool looksLikeApiKey(String raw) {
+    final k = clean(raw);
+    if (k.length < 18 || k.length > 260) return false;
+    return AiProviderCatalog.detectProviderFromKey(k) != null;
+  }
+}
+
 /// Wire protocol family used to communicate with any AI provider.
 enum AiWireFormat {
   openAiCompatible,
@@ -10,7 +56,7 @@ enum AiWireFormat {
   pollinationsFree,
 }
 
-/// Built-in + Free Instant Cloud + Custom AI provider catalog (Nimo v5.0 Ultra — Real Live Production Models).
+/// Built-in + Free Instant Cloud + Custom AI provider catalog (Nimo v7.0 Apex).
 enum AiProviderType {
   pollinations,
   gemini,
@@ -88,7 +134,7 @@ class AiProviderCatalog {
       defaultBaseUrl: 'https://text.pollinations.ai/openai',
       defaultModel: 'openai',
       defaultImageModel: 'flux',
-      suggestedModels: ['openai', 'openai-large', 'deepseek', 'mistral', 'qwen-coder', 'searchgpt'],
+      suggestedModels: ['openai', 'openai-fast', 'mistral', 'deepseek', 'qwen-coder'],
       wireFormat: AiWireFormat.pollinationsFree,
       requiresApiKey: false,
       hasFreeTier: true,
@@ -99,7 +145,7 @@ class AiProviderCatalog {
       keyGuideAr: [
         'هذا المحرك مجاني 100% ولا يحتاج أي مفتاح API أو تسجيل حساب.',
         'يعمل فوراً في الشات والمحادثة الصوتية وتوليد الصور ومختبر البرمجة.',
-        'بمجرد لصق أي مفتاح API (Gemini / OpenAI / Groq / Claude / OpenRouter) يتعرف عليه Nimo ويتصل بأحدث موديل تلقائياً!',
+        'بمجرد لصق أي مفتاح API (Gemini / OpenAI / Groq / Claude / OpenRouter / DeepSeek) يتعرف عليه Nimo ويتصل بأحدث موديل تلقائياً!',
       ],
       keyGuideEn: [
         '100% free cloud engine — no API key or sign-up required.',
@@ -114,17 +160,17 @@ class AiProviderCatalog {
       id: 'gemini',
       name: 'Google Gemini',
       shortName: 'Gemini',
-      descriptionEn: 'Auto-connects to latest Gemini 2.5 Pro / 2.5 Flash / 2.0 Flash + Native Image Gen',
-      descriptionAr: 'يتصل تلقائياً بأحدث نماذج جوجل الحقيقية (Gemini 2.5 Pro / Flash و 2.0 Flash) + توليد صور',
+      descriptionEn: 'Auto-connects to latest Gemini 2.5 Flash / 2.5 Pro / 2.0 Flash + Image Gen',
+      descriptionAr: 'يتصل تلقائياً بأحدث نماذج جوجل الحقيقية (Gemini 2.5 Flash / Pro و 2.0 Flash) + توليد صور',
       defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta',
       defaultModel: 'gemini-2.5-flash',
       defaultImageModel: 'gemini-2.0-flash-exp-image-generation',
       suggestedModels: [
         'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
         'gemini-2.5-pro',
         'gemini-2.0-flash',
         'gemini-2.0-flash-lite',
-        'gemini-1.5-pro',
         'gemini-1.5-flash',
       ],
       wireFormat: AiWireFormat.googleGemini,
@@ -148,18 +194,18 @@ class AiProviderCatalog {
     AiProviderPreset(
       type: AiProviderType.openai,
       id: 'openai',
-      name: 'OpenAI (GPT-4.1 / GPT-4o)',
+      name: 'OpenAI (GPT)',
       shortName: 'OpenAI',
-      descriptionEn: 'Auto-connects to latest GPT-4.1, GPT-4o, o4-mini + GPT-Image-1 / DALL-E 3 & HD Voice',
-      descriptionAr: 'يتصل تلقائياً بأحدث نماذج OpenAI (GPT-4.1 و GPT-4o و o4-mini) + صور GPT-Image-1 وصوت بشري HD',
+      descriptionEn: 'Auto-connects to latest GPT-4.1, GPT-4o, o4-mini + GPT-Image-1 & HD Voice',
+      descriptionAr: 'يتصل تلقائياً بأحدث نماذج OpenAI (GPT-4.1 و GPT-4o و o4-mini) + صور وصوت بشري HD',
       defaultBaseUrl: 'https://api.openai.com/v1',
-      defaultModel: 'gpt-4o',
+      defaultModel: 'gpt-4o-mini',
       defaultImageModel: 'gpt-image-1',
       suggestedModels: [
-        'gpt-4.1',
-        'gpt-4o',
-        'gpt-4.1-mini',
         'gpt-4o-mini',
+        'gpt-4o',
+        'gpt-4.1',
+        'gpt-4.1-mini',
         'o4-mini',
         'o3-mini',
       ],
@@ -186,7 +232,7 @@ class AiProviderCatalog {
       id: 'claude',
       name: 'Anthropic Claude',
       shortName: 'Claude',
-      descriptionEn: 'Auto-connects to latest Claude Sonnet 4, Claude 3.7 Sonnet & 3.5 Sonnet',
+      descriptionEn: 'Auto-connects to latest Claude Sonnet 4, Claude 3.7 Sonnet & 3.5 Haiku',
       descriptionAr: 'يتصل تلقائياً بأقوى نماذج البرمجة والكتابة: Claude Sonnet 4 و 3.7 Sonnet',
       defaultBaseUrl: 'https://api.anthropic.com/v1',
       defaultModel: 'claude-sonnet-4-20250514',
@@ -246,7 +292,7 @@ class AiProviderCatalog {
       descriptionEn: 'Latest Grok 3, Grok 3 Mini, Grok 2 & Grok-2-Image',
       descriptionAr: 'أحدث نماذج Grok 3 و Grok 3 Mini و Grok 2 + توليد صور Grok',
       defaultBaseUrl: 'https://api.x.ai/v1',
-      defaultModel: 'grok-3',
+      defaultModel: 'grok-3-mini',
       defaultImageModel: 'grok-2-image',
       suggestedModels: ['grok-3', 'grok-3-mini', 'grok-2-latest'],
       wireFormat: AiWireFormat.openAiCompatible,
@@ -270,15 +316,15 @@ class AiProviderCatalog {
       id: 'groq',
       name: 'Groq (Ultra-Fast + Voice)',
       shortName: 'Groq',
-      descriptionEn: 'Llama 4 Scout, Llama 3.3 70B & Qwen QwQ — ultra-fast for Live Voice & Arabic TTS',
-      descriptionAr: 'أسرع محرك عالمياً للصوت اللايف: Llama 4 و Llama 3.3 70B + صوت عربي مجاني!',
+      descriptionEn: 'Llama 3.3 70B, Llama 4 Scout & Llama 3.1 8B — ultra-fast free tier!',
+      descriptionAr: 'أسرع محرك عالمياً للصوت اللايف: Llama 3.3 70B و Llama 4 + صوت عربي مجاني!',
       defaultBaseUrl: 'https://api.groq.com/openai/v1',
       defaultModel: 'llama-3.3-70b-versatile',
       suggestedModels: [
-        'meta-llama/llama-4-scout-17b-16e-instruct',
         'llama-3.3-70b-versatile',
-        'qwen-qwq-32b',
         'llama-3.1-8b-instant',
+        'meta-llama/llama-4-scout-17b-16e-instruct',
+        'qwen-qwq-32b',
       ],
       wireFormat: AiWireFormat.openAiCompatible,
       hasFreeTier: true,
@@ -304,14 +350,14 @@ class AiProviderCatalog {
       descriptionEn: 'One key for Free & Flagship Gemini, DeepSeek V3, Llama 3.3, GPT-4o & Claude',
       descriptionAr: 'مفتاح واحد لأكثر من 300 نموذج مجاني ومدفوع (Gemini, DeepSeek, GPT-4o, Claude)',
       defaultBaseUrl: 'https://openrouter.ai/api/v1',
-      defaultModel: 'google/gemini-2.0-flash-exp:free',
+      defaultModel: 'openrouter/free',
       defaultImageModel: 'google/gemini-2.5-flash-image-preview',
       suggestedModels: [
-        'google/gemini-2.0-flash-exp:free',
-        'deepseek/deepseek-chat-v3-0324:free',
+        'openrouter/free',
         'meta-llama/llama-3.3-70b-instruct:free',
-        'qwen/qwen-2.5-72b-instruct:free',
-        'openai/gpt-4o',
+        'deepseek/deepseek-chat-v3-0324:free',
+        'google/gemini-2.5-flash',
+        'openai/gpt-4o-mini',
         'anthropic/claude-sonnet-4',
       ],
       wireFormat: AiWireFormat.openAiCompatible,
@@ -322,10 +368,10 @@ class AiProviderCatalog {
       keyConsoleUrl: 'https://openrouter.ai/keys',
       keyGuideAr: [
         'افتح openrouter.ai/keys وأنشئ مفتاحاً جديداً.',
-        'انسخ المفتاح (sk-or-v1-...) واختر أي نموذج :free مجاني أو رائد!',
+        'انسخ المفتاح (sk-or-v1-...) واستخدم openrouter/free للاتصال التلقائي بأفضل نموذج مجاني متاح!',
       ],
       keyGuideEn: [
-        'Visit openrouter.ai/keys, copy sk-or-v1-... and pick any :free or flagship model.',
+        'Visit openrouter.ai/keys, copy sk-or-v1-... and use openrouter/free or any flagship model.',
       ],
       badgeColor: TalkoraColors.iosPurple,
       icon: CupertinoIcons.globe,
@@ -335,11 +381,11 @@ class AiProviderCatalog {
       id: 'mistral',
       name: 'Mistral AI',
       shortName: 'Mistral',
-      descriptionEn: 'Mistral Large Latest, Mistral Small Latest & Codestral (Free tier!)',
-      descriptionAr: 'أحدث نماذج Mistral Large و Small و Codestral للبرمجة (يدعم الخطة المجانية)',
+      descriptionEn: 'Mistral Small Latest, Mistral Large Latest & Codestral (Free tier!)',
+      descriptionAr: 'أحدث نماذج Mistral Small و Large و Codestral للبرمجة (يدعم الخطة المجانية)',
       defaultBaseUrl: 'https://api.mistral.ai/v1',
-      defaultModel: 'mistral-large-latest',
-      suggestedModels: ['mistral-large-latest', 'mistral-small-latest', 'codestral-latest'],
+      defaultModel: 'mistral-small-latest',
+      suggestedModels: ['mistral-small-latest', 'mistral-large-latest', 'codestral-latest'],
       wireFormat: AiWireFormat.openAiCompatible,
       hasFreeTier: true,
       supportsImageGen: false,
@@ -420,9 +466,9 @@ class AiProviderCatalog {
       descriptionEn: 'Connect ANY OpenAI-compatible URL, chat/image model ID & API key',
       descriptionAr: 'ربط أي رابط API مخصص وأي اسم نموذج نصي أو صور وأي مفتاح بحرية كاملة',
       defaultBaseUrl: 'https://api.openai.com/v1',
-      defaultModel: 'gpt-4o',
+      defaultModel: 'gpt-4o-mini',
       defaultImageModel: 'dall-e-3',
-      suggestedModels: ['gpt-4o', 'gemini-2.5-flash', 'deepseek-chat', 'claude-sonnet-4-20250514'],
+      suggestedModels: ['gpt-4o-mini', 'gpt-4o', 'gemini-2.5-flash', 'deepseek-chat'],
       wireFormat: AiWireFormat.openAiCompatible,
       hasFreeTier: false,
       supportsImageGen: true,
@@ -449,7 +495,7 @@ class AiProviderCatalog {
 
   /// Automatically identifies the AI provider from the pasted API key prefix!
   static String? detectProviderFromKey(String rawKey) {
-    final k = rawKey.trim();
+    final k = AiKeySanitizer.clean(rawKey);
     if (k.isEmpty) return null;
     if (k.startsWith('AIza')) return 'gemini';
     if (k.startsWith('sk-ant-')) return 'claude';
@@ -458,11 +504,11 @@ class AiProviderCatalog {
     if (k.startsWith('xai-')) return 'xai';
     if (k.startsWith('hf_')) return 'huggingface';
     if (k.startsWith('sk-proj-') || k.startsWith('sk-svcacct-')) return 'openai';
-    if (k.startsWith('sk-') && k.length >= 30) return 'openai';
+    if (k.startsWith('sk-') && k.length >= 24) return 'openai';
     return null;
   }
 
-  /// Checks if a previously saved model ID is legacy/fictional from older versions and needs auto-upgrade.
+  /// Checks if a previously saved model ID is legacy/fictional/deprecated and needs auto-upgrade.
   static bool isLegacyInvalidModel(String model) {
     final m = model.trim().toLowerCase();
     return m.contains('gemini-3.8') ||
@@ -480,7 +526,8 @@ class AiProviderCatalog {
         m.contains('deepseek-v4') ||
         m.contains('grok-4.') ||
         m.contains('mistral-large-4') ||
-        m.contains('mistral-small-4');
+        m.contains('mistral-small-4') ||
+        m == 'google/gemini-2.0-flash-exp:free';
   }
 }
 
@@ -513,21 +560,21 @@ class ProviderCredential {
   }
 
   Map<String, dynamic> toJson() => {
-        'apiKey': apiKey,
-        'model': model,
-        'baseUrl': baseUrl,
+        'apiKey': AiKeySanitizer.clean(apiKey),
+        'model': model.trim(),
+        'baseUrl': baseUrl.trim(),
         'discoveredModels': discoveredModels,
       };
 
   factory ProviderCredential.fromJson(Map<String, dynamic> json) {
     final rawDiscovered = json['discoveredModels'];
     final discovered = rawDiscovered is List
-        ? rawDiscovered.map((e) => e.toString()).where((e) => e.isNotEmpty).toList()
+        ? rawDiscovered.map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList()
         : const <String>[];
     return ProviderCredential(
-      apiKey: (json['apiKey'] as String?) ?? '',
-      model: (json['model'] as String?) ?? '',
-      baseUrl: (json['baseUrl'] as String?) ?? '',
+      apiKey: AiKeySanitizer.clean((json['apiKey'] as String?) ?? ''),
+      model: ((json['model'] as String?) ?? '').trim(),
+      baseUrl: ((json['baseUrl'] as String?) ?? '').trim(),
       discoveredModels: discovered,
     );
   }
@@ -542,6 +589,8 @@ class AiChatMessage {
   final String? imageUrl;
   final String? imageBase64;
   final String? actionBadge;
+  final int? latencyMs;
+  final bool isPinned;
 
   const AiChatMessage({
     required this.role,
@@ -551,7 +600,33 @@ class AiChatMessage {
     this.imageUrl,
     this.imageBase64,
     this.actionBadge,
+    this.latencyMs,
+    this.isPinned = false,
   });
+
+  AiChatMessage copyWith({
+    String? role,
+    String? content,
+    DateTime? timestamp,
+    String? modelUsed,
+    String? imageUrl,
+    String? imageBase64,
+    String? actionBadge,
+    int? latencyMs,
+    bool? isPinned,
+  }) {
+    return AiChatMessage(
+      role: role ?? this.role,
+      content: content ?? this.content,
+      timestamp: timestamp ?? this.timestamp,
+      modelUsed: modelUsed ?? this.modelUsed,
+      imageUrl: imageUrl ?? this.imageUrl,
+      imageBase64: imageBase64 ?? this.imageBase64,
+      actionBadge: actionBadge ?? this.actionBadge,
+      latencyMs: latencyMs ?? this.latencyMs,
+      isPinned: isPinned ?? this.isPinned,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         'role': role,
@@ -560,6 +635,8 @@ class AiChatMessage {
         'modelUsed': modelUsed,
         'imageUrl': imageUrl,
         'actionBadge': actionBadge,
+        'latencyMs': latencyMs,
+        'isPinned': isPinned,
       };
 
   factory AiChatMessage.fromJson(Map<String, dynamic> json) {
@@ -570,6 +647,8 @@ class AiChatMessage {
       modelUsed: json['modelUsed'] as String?,
       imageUrl: json['imageUrl'] as String?,
       actionBadge: json['actionBadge'] as String?,
+      latencyMs: (json['latencyMs'] as num?)?.toInt(),
+      isPinned: json['isPinned'] == true,
     );
   }
 }
@@ -583,6 +662,7 @@ class AiResponseResult {
   final String providerName;
   final String modelName;
   final bool usedFallback;
+  final String? providerId;
 
   const AiResponseResult({
     required this.success,
@@ -592,6 +672,7 @@ class AiResponseResult {
     required this.providerName,
     required this.modelName,
     this.usedFallback = false,
+    this.providerId,
   });
 }
 

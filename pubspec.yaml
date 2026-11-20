@@ -1,7 +1,7 @@
 name: talkora_ai
-description: Nimo v6.0 Titan Edition (YOSSEF JOO Edition) — Bulletproof Auto-Latest AI Router, Live Code Preview Lab, GitHub & API Mega-Database Injection, Key-Powered Voice AI, Multi-Engine Image Studio & Full AI Learning Suite.
+description: Nimo v7.0 Apex (YOSSEF JOO Edition) — Turbo 120fps Motion Engine, Bulletproof Auto-Sanitized AI Key Vault & Self-Healing Router, Multi-Session AI Chat, Cleaned Unified Mega-DB, Live Code Preview Lab & Key-Powered Voice AI.
 publish_to: "none"
-version: 6.0.0+6
+version: 7.0.0+7
 
 environment:
   sdk: ">=3.4.0 <4.0.0"

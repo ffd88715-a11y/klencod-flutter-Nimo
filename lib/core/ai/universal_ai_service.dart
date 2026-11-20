@@ -5,14 +5,13 @@ import 'package:dio/dio.dart';
 import 'package:talkora_ai/core/ai/ai_provider_models.dart';
 import 'package:talkora_ai/core/storage/app_state_provider.dart';
 
-/// Nimo v6.0 Titan — Bulletproof Universal Multi-Provider AI Router.
-/// Guarantees reliable API key connection across Google Gemini, OpenAI, Claude, Groq, DeepSeek,
-/// OpenRouter, xAI, Mistral, HuggingFace, Ollama, Custom APIs, and Free Cloud AI:
-/// - Safe dynamic JSON parsing (never crashes on text/plain JSON responses)
-/// - Sends Gemini key via BOTH `?key=` query parameter AND `x-goog-api-key` header
-/// - Live `/models` auto-discovery + full-chain model self-healing on 404/400/decommissioned
-/// - Automatic retry on transient network/429/502/503 errors
-/// - Clear Arabic & English diagnostics for every HTTP error code
+/// Nimo v7.0 Apex — Bulletproof Universal Multi-Provider AI Router.
+/// Fixes every root cause of API key & model failures:
+/// 1. Sanitizes every API key via `AiKeySanitizer.clean` (removes invisible RTL/LTR/zero-width/Bearer/newlines)
+/// 2. Uses `ResponseType.plain` + safe JSON decoding (never crashes on text/html or text/plain errors)
+/// 3. Strictly normalizes alternating user/assistant turns for Google Gemini & Anthropic Claude
+/// 4. Live `/models` auto-discovery + automatic self-healing on 404/400/429/deprecated models
+/// 5. Fast transient retry (502/503/504/timeout) + multi-key failover + clear Arabic diagnostics
 class UniversalAiService {
   final Dio _dio;
 
@@ -20,10 +19,13 @@ class UniversalAiService {
       : _dio = dio ??
             Dio(
               BaseOptions(
-                connectTimeout: const Duration(seconds: 25),
-                receiveTimeout: const Duration(seconds: 80),
-                sendTimeout: const Duration(seconds: 25),
-                headers: {'Accept': 'application/json, text/plain, */*'},
+                connectTimeout: const Duration(seconds: 16),
+                receiveTimeout: const Duration(seconds: 65),
+                sendTimeout: const Duration(seconds: 18),
+                responseType: ResponseType.plain,
+                headers: const {
+                  'Accept': 'application/json, text/plain, */*',
+                },
               ),
             );
 
@@ -44,7 +46,7 @@ class UniversalAiService {
     return data;
   }
 
-  /// Queries the provider's live `/models` endpoint using the user's API key
+  /// Queries the provider's live `/models` endpoint using the sanitized API key
   /// and automatically picks the newest, strongest chat model supported by that key.
   Future<ModelDiscoveryResult> discoverLatestModel({
     required String providerId,
@@ -52,7 +54,7 @@ class UniversalAiService {
     String? baseUrl,
   }) async {
     final preset = AiProviderCatalog.byId(providerId);
-    final key = apiKey.trim();
+    final key = AiKeySanitizer.clean(apiKey);
     final cleanBase = _normalizeBaseUrl(
       (baseUrl != null && baseUrl.trim().isNotEmpty) ? baseUrl.trim() : preset.defaultBaseUrl,
     );
@@ -81,8 +83,11 @@ class UniversalAiService {
       if (preset.wireFormat == AiWireFormat.googleGemini) {
         final res = await _dio.get<dynamic>(
           '$cleanBase/models',
-          queryParameters: {'pageSize': 100, 'key': key},
-          options: Options(headers: {'x-goog-api-key': key}),
+          queryParameters: {'pageSize': 100},
+          options: Options(
+            responseType: ResponseType.plain,
+            headers: {'x-goog-api-key': key},
+          ),
         );
         final decoded = _safeDecode(res.data);
         final rawList = (decoded is Map ? decoded['models'] : null) as List<dynamic>? ?? const [];
@@ -103,6 +108,7 @@ class UniversalAiService {
         final res = await _dio.get<dynamic>(
           '$cleanBase/models',
           options: Options(
+            responseType: ResponseType.plain,
             headers: {
               'x-api-key': key,
               'anthropic-version': '2023-06-01',
@@ -122,9 +128,12 @@ class UniversalAiService {
         final headers = <String, dynamic>{
           if (key.isNotEmpty) 'Authorization': 'Bearer $key',
           if (preset.type == AiProviderType.openrouter) 'HTTP-Referer': 'https://nimo.ai',
-          if (preset.type == AiProviderType.openrouter) 'X-Title': 'Nimo v6.0 Titan',
+          if (preset.type == AiProviderType.openrouter) 'X-Title': 'Nimo v7.0 Apex',
         };
-        final res = await _dio.get<dynamic>(modelsUrl, options: Options(headers: headers));
+        final res = await _dio.get<dynamic>(
+          modelsUrl,
+          options: Options(responseType: ResponseType.plain, headers: headers),
+        );
         final decoded = _safeDecode(res.data);
         List<dynamic> rawList = const [];
         if (decoded is Map) {
@@ -238,22 +247,21 @@ class UniversalAiService {
     }
 
     if (providerId == 'gemini') {
-      if (l == 'gemini-2.5-flash') score += 650;
-      if (l == 'gemini-2.0-flash') score += 600;
+      if (l == 'gemini-2.5-flash') score += 680;
+      if (l == 'gemini-2.5-flash-lite') score += 640;
+      if (l == 'gemini-2.0-flash') score += 610;
       if (l.contains('2.5-pro')) score += 590;
       if (l.contains('2.5-flash') && !l.contains('lite')) score += 560;
       if (l.contains('2.0-flash') && !l.contains('lite')) score += 500;
       if (l.contains('1.5-flash')) score += 420;
       if (l.contains('exp') || l.contains('preview') || l.contains('thinking')) score -= 45;
-      if (l.contains('lite') || l.contains('8b')) score -= 40;
+      if (l.contains('8b')) score -= 40;
     } else if (providerId == 'openai') {
-      if (l == 'gpt-4.1') score += 720;
-      if (l == 'gpt-4o') score += 700;
       if (l.startsWith('gpt-5')) score += 850;
-      if (l.startsWith('gpt-4.5')) score += 760;
-      if (l == 'gpt-4.1-mini' || l == 'gpt-4o-mini') score += 630;
-      if (l.startsWith('o4-mini') || l.startsWith('o3')) score += 620;
-      if (l.contains('mini')) score -= 20;
+      if (l == 'gpt-4.1') score += 740;
+      if (l == 'gpt-4o') score += 720;
+      if (l == 'gpt-4o-mini' || l == 'gpt-4.1-mini') score += 690;
+      if (l.startsWith('o4-mini') || l.startsWith('o3')) score += 630;
       if (l.contains('nano') || l.contains('search') || l.contains('preview')) score -= 40;
     } else if (providerId == 'claude') {
       if (l.contains('sonnet-4') || l.contains('4-sonnet')) score += 750;
@@ -262,33 +270,34 @@ class UniversalAiService {
       if (l.contains('3-5-sonnet')) score += 550;
       if (l.contains('latest')) score += 40;
     } else if (providerId == 'groq') {
-      if (l.contains('llama-3.3-70b')) score += 700;
-      if (l.contains('llama-4')) score += 680;
+      if (l.contains('llama-3.3-70b')) score += 720;
+      if (l.contains('llama-4')) score += 690;
+      if (l.contains('llama-3.1-8b')) score += 640;
       if (l.contains('qwen')) score += 540;
-      if (l.contains('70b')) score += 100;
-      if (l.contains('8b')) score -= 30;
+      if (l.contains('70b')) score += 80;
     } else if (providerId == 'deepseek') {
       if (l == 'deepseek-chat') score += 720;
       if (l == 'deepseek-reasoner') score += 650;
     } else if (providerId == 'xai') {
       if (l == 'grok-3' || l == 'grok-3-latest') score += 720;
-      if (l.contains('grok-3-mini')) score += 620;
+      if (l.contains('grok-3-mini')) score += 650;
       if (l.contains('grok-2')) score += 520;
     } else if (providerId == 'openrouter') {
+      if (l == 'openrouter/free') score += 800;
       if (l.endsWith(':free')) score += 350;
       if (l.contains('gemini-2.5') || l.contains('gemini-2.0')) score += 260;
       if (l.contains('deepseek-chat-v3') || l.contains('deepseek-r1')) score += 240;
       if (l.contains('llama-3.3-70b')) score += 220;
     } else if (providerId == 'mistral') {
+      if (l == 'mistral-small-latest') score += 720;
       if (l == 'mistral-large-latest') score += 700;
-      if (l == 'mistral-small-latest') score += 600;
       if (l == 'codestral-latest') score += 580;
     }
 
     return score;
   }
 
-  /// Sends a multi-turn conversation with Full-Chain Model Self-Healing, Smart Routing & Automatic Fallback.
+  /// Sends a multi-turn conversation with Full-Chain Model Self-Healing, Live Model Discovery & Multi-Key Failover.
   Future<AiResponseResult> sendChat({
     required AiSettingsState settings,
     required List<AiChatMessage> messages,
@@ -298,14 +307,14 @@ class UniversalAiService {
   }) async {
     final baseSys = (systemPromptOverride ?? settings.customSystemPrompt).trim();
     final qualityDirective =
-        '\n[NIMO TITAN QUALITY]: Deliver thorough, accurate, well-structured answers. '
+        '\n[NIMO APEX QUALITY]: Deliver thorough, accurate, well-structured answers. '
         'Match the user language naturally (clear Arabic or English). Put code inside fenced markdown blocks.';
     final thinkingBoost = settings.deepThinkingEnabled
         ? '\n[DEEP THINKING MODE]: Analyze step-by-step, verify logic and edge cases, and deliver an expert-grade answer.'
         : '';
     final fullSystemPrompt = '$baseSys$qualityDirective$thinkingBoost${ragContext ?? ''}'.trim();
 
-    // 1. Try primary active provider (with full model self-healing)
+    // 1. Try primary active provider (with full live self-healing)
     final primaryResult = await _sendToProviderWithSelfHeal(
       providerId: settings.activeProviderId,
       settings: settings,
@@ -317,13 +326,13 @@ class UniversalAiService {
       return primaryResult;
     }
 
-    // 2. Smart Auto-Fallback: try other configured providers with keys, then Free Cloud AI
+    // 2. Smart Auto-Fallback: try all other configured providers with saved keys, then Free Cloud AI
     if (allowFallback && settings.smartFallbackEnabled) {
       final candidateIds = <String>[];
       for (final p in AiProviderCatalog.all) {
         if (p.id == settings.activeProviderId) continue;
         if (p.id == 'pollinations' || p.id == 'ollama') continue;
-        final key = settings.credentialFor(p.id).apiKey.trim();
+        final key = AiKeySanitizer.clean(settings.credentialFor(p.id).apiKey);
         if (key.isNotEmpty) {
           candidateIds.add(p.id);
         }
@@ -347,6 +356,7 @@ class UniversalAiService {
             providerName: '${fbResult.providerName} (Auto)',
             modelName: fbResult.modelName,
             usedFallback: true,
+            providerId: fallbackId,
           );
         }
       }
@@ -355,25 +365,42 @@ class UniversalAiService {
     return primaryResult;
   }
 
-  /// Tests a specific provider directly (probing fallback models automatically if the selected model is unavailable).
+  /// Tests a specific provider directly (with live model self-healing).
   Future<AiResponseResult> testConnection(AiSettingsState settings, {String? providerIdOverride}) {
     final targetId = providerIdOverride ?? settings.activeProviderId;
     return _sendToProviderWithSelfHeal(
       providerId: targetId,
       settings: settings,
-      systemPrompt: 'Reply briefly with: OK - Connected!',
+      systemPrompt: 'Reply with: OK',
       messages: [
         AiChatMessage(
           role: 'user',
-          content: 'Hi',
+          content: 'Ping',
           timestamp: DateTime.now(),
         ),
       ],
     );
   }
 
-  /// Tries the configured model first; if the server returns 404/400/model error/rate-limit on that model,
-  /// automatically probes the provider's discovered + suggested production models until one succeeds!
+  /// Tests ALL configured providers (with saved keys) in parallel for the Key Health Dashboard!
+  Future<Map<String, AiResponseResult>> testAllConfiguredProviders(AiSettingsState settings) async {
+    final targets = <String>[];
+    for (final p in AiProviderCatalog.all) {
+      if (p.id == 'ollama') continue;
+      if (!p.requiresApiKey || AiKeySanitizer.clean(settings.credentialFor(p.id).apiKey).isNotEmpty) {
+        targets.add(p.id);
+      }
+    }
+    final futures = targets.map((id) async {
+      final res = await testConnection(settings, providerIdOverride: id);
+      return MapEntry(id, res);
+    });
+    final entries = await Future.wait(futures);
+    return Map<String, AiResponseResult>.fromEntries(entries);
+  }
+
+  /// Tries the configured model first; if the server returns 404/400/429/model-error,
+  /// automatically runs live `/models` discovery on that API key + probes curated models until one succeeds!
   Future<AiResponseResult> _sendToProviderWithSelfHeal({
     required String providerId,
     required AiSettingsState settings,
@@ -382,12 +409,13 @@ class UniversalAiService {
   }) async {
     final preset = AiProviderCatalog.byId(providerId);
     final cred = settings.credentialFor(providerId);
+    final cleanKey = AiKeySanitizer.clean(cred.apiKey);
     final rawModel = cred.model.trim();
     final initialModel = (rawModel.isEmpty || AiProviderCatalog.isLegacyInvalidModel(rawModel))
         ? preset.defaultModel
         : rawModel;
 
-    final firstRes = await _sendToSpecificProvider(
+    final firstRes = await _sendWithTransientRetry(
       providerId: providerId,
       settings: settings,
       messages: messages,
@@ -401,6 +429,7 @@ class UniversalAiService {
     final isAuthInvalid = errLower.contains('401') ||
         errLower.contains('invalid_api_key') ||
         errLower.contains('api key not valid') ||
+        errLower.contains('api_key_invalid') ||
         errLower.contains('incorrect api key');
     if (isAuthInvalid) return firstRes;
 
@@ -412,13 +441,25 @@ class UniversalAiService {
         errLower.contains('model') ||
         errLower.contains('decommissioned') ||
         errLower.contains('deprecated') ||
-        errLower.contains('unsupported');
+        errLower.contains('unsupported') ||
+        errLower.contains('not supported');
 
-    if (shouldRetryAltModel && (!preset.requiresApiKey || cred.apiKey.trim().isNotEmpty)) {
+    if (shouldRetryAltModel && (!preset.requiresApiKey || cleanKey.isNotEmpty)) {
+      // Run live discovery if we don't already have discovered models
+      List<String> liveDiscovered = cred.discoveredModels;
+      if (liveDiscovered.isEmpty && preset.wireFormat != AiWireFormat.pollinationsFree) {
+        final disc = await discoverLatestModel(
+          providerId: providerId,
+          apiKey: cleanKey,
+          baseUrl: cred.baseUrl,
+        );
+        if (disc.success) liveDiscovered = disc.availableModels;
+      }
+
       final fallbackModels = <String>[
-        ...cred.discoveredModels,
+        ...liveDiscovered,
         ...preset.suggestedModels,
-      ].where((m) => m != initialModel).toSet().take(5);
+      ].where((m) => m.trim().isNotEmpty && m != initialModel).toSet().take(5);
 
       for (final altModel in fallbackModels) {
         final retryRes = await _sendToSpecificProvider(
@@ -435,6 +476,41 @@ class UniversalAiService {
     return firstRes;
   }
 
+  /// Retries once quickly on transient 502/503/504/timeout errors.
+  Future<AiResponseResult> _sendWithTransientRetry({
+    required String providerId,
+    required AiSettingsState settings,
+    required List<AiChatMessage> messages,
+    required String systemPrompt,
+    required String modelOverride,
+  }) async {
+    final res = await _sendToSpecificProvider(
+      providerId: providerId,
+      settings: settings,
+      messages: messages,
+      systemPrompt: systemPrompt,
+      modelOverride: modelOverride,
+    );
+    if (res.success) return res;
+    final err = (res.error ?? '').toLowerCase();
+    final isTransient = err.contains('502') ||
+        err.contains('503') ||
+        err.contains('504') ||
+        err.contains('timeout') ||
+        err.contains('connection reset');
+    if (isTransient) {
+      await Future<void>.delayed(const Duration(milliseconds: 450));
+      return _sendToSpecificProvider(
+        providerId: providerId,
+        settings: settings,
+        messages: messages,
+        systemPrompt: systemPrompt,
+        modelOverride: modelOverride,
+      );
+    }
+    return res;
+  }
+
   Future<AiResponseResult> _sendToSpecificProvider({
     required String providerId,
     required AiSettingsState settings,
@@ -445,7 +521,7 @@ class UniversalAiService {
     final sw = Stopwatch()..start();
     final preset = AiProviderCatalog.byId(providerId);
     final cred = settings.credentialFor(providerId);
-    final apiKey = cred.apiKey.trim();
+    final apiKey = AiKeySanitizer.clean(cred.apiKey);
     final model = (modelOverride ?? cred.model).trim().isEmpty
         ? preset.defaultModel
         : (modelOverride ?? cred.model).trim();
@@ -462,6 +538,7 @@ class UniversalAiService {
         latencyMs: sw.elapsedMilliseconds,
         providerName: preset.shortName,
         modelName: model,
+        providerId: providerId,
       );
     }
 
@@ -520,6 +597,7 @@ class UniversalAiService {
         latencyMs: sw.elapsedMilliseconds,
         providerName: preset.shortName,
         modelName: model,
+        providerId: providerId,
       );
     } on DioException catch (e) {
       sw.stop();
@@ -533,6 +611,7 @@ class UniversalAiService {
         latencyMs: sw.elapsedMilliseconds,
         providerName: preset.shortName,
         modelName: model,
+        providerId: providerId,
       );
     } catch (e) {
       sw.stop();
@@ -543,19 +622,47 @@ class UniversalAiService {
         latencyMs: sw.elapsedMilliseconds,
         providerName: preset.shortName,
         modelName: model,
+        providerId: providerId,
       );
     }
   }
 
+  /// Normalizes chat turns so messages ALWAYS start with 'user', have non-empty text,
+  /// and strictly alternate 'user' / 'assistant' (required by Gemini & Claude APIs!).
+  List<Map<String, String>> _normalizeStrictTurns(List<AiChatMessage> messages) {
+    final turns = <Map<String, String>>[];
+    for (final m in messages) {
+      if (m.role != 'user' && m.role != 'assistant') continue;
+      final txt = m.content.trim();
+      if (txt.isEmpty) continue;
+      if (turns.isEmpty && m.role != 'user') continue;
+      if (turns.isNotEmpty && turns.last['role'] == m.role) {
+        turns.last['content'] = '${turns.last['content']}\n\n$txt';
+      } else {
+        turns.add({'role': m.role, 'content': txt});
+      }
+    }
+    if (turns.isEmpty) {
+      turns.add({'role': 'user', 'content': 'Hello'});
+    }
+    return turns;
+  }
+
   String _friendlyError(int? status, String raw) {
+    if (status == 400) {
+      return 'HTTP 400 (طلب غير متوافق أو اسم نموذج غير مدعوم): $raw';
+    }
     if (status == 401) {
-      return 'HTTP 401 (المفتاح غير صحيح أو منتهي الصلاحية): $raw';
+      return 'HTTP 401 (المفتاح غير صحيح أو منتهي الصلاحية — تأكد من نسخه كاملاً): $raw';
     }
     if (status == 402) {
       return 'HTTP 402 (الرصيد غير كافٍ في حساب API): $raw';
     }
     if (status == 403) {
-      return 'HTTP 403 (صلاحية المفتاح مرفوضة أو غير مدعومة في منطقتك): $raw';
+      return 'HTTP 403 (صلاحية المفتاح مرفوضة أو الخدمة مقيدة في منطقتك): $raw';
+    }
+    if (status == 404) {
+      return 'HTTP 404 (النموذج غير موجود على هذا المفتاح — جرب تحديث النماذج): $raw';
     }
     if (status == 429) {
       return 'HTTP 429 (تم تجاوز الحد المجاني مؤقتاً — انتظر ثوانٍ أو أضف مفتاحاً آخر): $raw';
@@ -563,8 +670,12 @@ class UniversalAiService {
     if (status != null) {
       return 'HTTP $status: $raw';
     }
-    if (raw.toLowerCase().contains('socketexception') || raw.toLowerCase().contains('failed host lookup')) {
+    final low = raw.toLowerCase();
+    if (low.contains('socketexception') || low.contains('failed host lookup')) {
       return 'لا يوجد اتصال بالإنترنت أو تعذّر الوصول للخادم: $raw';
+    }
+    if (low.contains('timeout')) {
+      return 'انتهت مهلة الاتصال بالخادم — تأكد من سرعة الإنترنت وحاول مجدداً.';
     }
     return raw;
   }
@@ -580,7 +691,8 @@ class UniversalAiService {
     final payloadMessages = <Map<String, String>>[
       if (trimmedSys.isNotEmpty) {'role': 'system', 'content': trimmedSys},
       for (final m in messages)
-        if (m.role == 'user' || m.role == 'assistant') {'role': m.role, 'content': m.content},
+        if ((m.role == 'user' || m.role == 'assistant') && m.content.trim().isNotEmpty)
+          {'role': m.role, 'content': m.content.trim()},
     ];
 
     final modelsToTry = <String>[model, if (model != 'openai') 'openai', 'mistral'];
@@ -588,13 +700,16 @@ class UniversalAiService {
       try {
         final res = await _dio.post<dynamic>(
           baseUrl,
-          options: Options(headers: {'Content-Type': 'application/json'}),
-          data: {
+          options: Options(
+            responseType: ResponseType.plain,
+            headers: const {'Content-Type': 'application/json'},
+          ),
+          data: jsonEncode({
             'model': mName,
             'messages': payloadMessages,
             'temperature': temperature,
             'private': true,
-          },
+          }),
         );
         final data = _safeDecode(res.data);
         if (data is Map) {
@@ -604,7 +719,7 @@ class UniversalAiService {
             final content = msg?['content'];
             if (content is String && content.trim().isNotEmpty) return content;
           }
-        } else if (data is String && data.trim().isNotEmpty) {
+        } else if (data is String && data.trim().isNotEmpty && !data.trimLeft().startsWith('<')) {
           return data;
         }
       } catch (_) {}
@@ -625,7 +740,7 @@ class UniversalAiService {
       'https://text.pollinations.ai/$encoded?model=openai&seed=$seed&system=$sysEnc',
       options: Options(responseType: ResponseType.plain),
     );
-    if (res.data != null && res.data!.trim().isNotEmpty) {
+    if (res.data != null && res.data!.trim().isNotEmpty && !res.data!.trimLeft().startsWith('<')) {
       return res.data!;
     }
     throw Exception('Free Cloud AI did not return a response.');
@@ -645,14 +760,15 @@ class UniversalAiService {
     final payloadMessages = <Map<String, String>>[
       if (systemPrompt.isNotEmpty) {'role': 'system', 'content': systemPrompt},
       for (final m in messages)
-        if (m.role == 'user' || m.role == 'assistant') {'role': m.role, 'content': m.content},
+        if ((m.role == 'user' || m.role == 'assistant') && m.content.trim().isNotEmpty)
+          {'role': m.role, 'content': m.content.trim()},
     ];
 
     final headers = <String, dynamic>{
       'Content-Type': 'application/json',
       if (apiKey.isNotEmpty) 'Authorization': 'Bearer $apiKey',
       if (isOpenRouter) 'HTTP-Referer': 'https://nimo.ai',
-      if (isOpenRouter) 'X-Title': 'Nimo v6.0 Titan',
+      if (isOpenRouter) 'X-Title': 'Nimo v7.0 Apex',
     };
 
     final isReasoningModel = model.startsWith('o1') || model.startsWith('o3') || model.startsWith('o4');
@@ -665,8 +781,8 @@ class UniversalAiService {
 
     final res = await _dio.post<dynamic>(
       endpoint,
-      options: Options(headers: headers),
-      data: body,
+      options: Options(responseType: ResponseType.plain, headers: headers),
+      data: jsonEncode(body),
     );
 
     final data = _safeDecode(res.data);
@@ -676,6 +792,14 @@ class UniversalAiService {
         final msg = (choices.first as Map)['message'] as Map?;
         final content = msg?['content'];
         if (content is String && content.isNotEmpty) return content;
+        // Support array content parts (some OpenAI-compatible gateways)
+        if (content is List) {
+          final buf = StringBuffer();
+          for (final part in content) {
+            if (part is Map && part['text'] is String) buf.write(part['text']);
+          }
+          if (buf.isNotEmpty) return buf.toString();
+        }
         // Support reasoning_content fallback (DeepSeek Reasoner / Qwen)
         final reasoning = msg?['reasoning_content'];
         if (reasoning is String && reasoning.isNotEmpty) return reasoning;
@@ -695,16 +819,21 @@ class UniversalAiService {
   }) async {
     final cleanModel = model.startsWith('models/') ? model.substring(7) : model;
     final endpoint = '$baseUrl/models/$cleanModel:generateContent';
+    final isV1Beta = baseUrl.contains('v1beta');
 
+    final strictTurns = _normalizeStrictTurns(messages);
     final contents = <Map<String, dynamic>>[
-      for (final m in messages)
-        if (m.role == 'user' || m.role == 'assistant')
-          {
-            'role': m.role == 'assistant' ? 'model' : 'user',
-            'parts': [
-              {'text': m.content}
-            ],
-          },
+      for (int i = 0; i < strictTurns.length; i++)
+        {
+          'role': strictTurns[i]['role'] == 'assistant' ? 'model' : 'user',
+          'parts': [
+            {
+              'text': (!isV1Beta && i == 0 && systemPrompt.isNotEmpty)
+                  ? '$systemPrompt\n\n${strictTurns[i]['content']}'
+                  : strictTurns[i]['content'],
+            }
+          ],
+        },
     ];
 
     final body = <String, dynamic>{
@@ -713,7 +842,7 @@ class UniversalAiService {
         'temperature': temperature,
         'maxOutputTokens': maxTokens,
       },
-      if (systemPrompt.isNotEmpty)
+      if (isV1Beta && systemPrompt.isNotEmpty)
         'systemInstruction': {
           'parts': [
             {'text': systemPrompt}
@@ -723,14 +852,14 @@ class UniversalAiService {
 
     final res = await _dio.post<dynamic>(
       endpoint,
-      queryParameters: {'key': apiKey},
       options: Options(
+        responseType: ResponseType.plain,
         headers: {
           'Content-Type': 'application/json',
           'x-goog-api-key': apiKey,
         },
       ),
-      data: body,
+      data: jsonEncode(body),
     );
 
     final data = _safeDecode(res.data);
@@ -750,6 +879,10 @@ class UniversalAiService {
           if (buffer.isNotEmpty) return buffer.toString();
         }
       }
+      final blockReason = (data['promptFeedback'] as Map?)?['blockReason'];
+      if (blockReason != null) {
+        throw Exception('Gemini blocked prompt: $blockReason');
+      }
     }
     throw Exception('Empty response from Google Gemini API.');
   }
@@ -764,27 +897,25 @@ class UniversalAiService {
     required int maxTokens,
   }) async {
     final endpoint = baseUrl.endsWith('/messages') ? baseUrl : '$baseUrl/messages';
-    final claudeMessages = <Map<String, String>>[
-      for (final m in messages)
-        if (m.role == 'user' || m.role == 'assistant') {'role': m.role, 'content': m.content},
-    ];
+    final claudeMessages = _normalizeStrictTurns(messages);
 
     final res = await _dio.post<dynamic>(
       endpoint,
       options: Options(
+        responseType: ResponseType.plain,
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
         },
       ),
-      data: {
+      data: jsonEncode({
         'model': model,
         'max_tokens': maxTokens,
         'temperature': temperature,
         if (systemPrompt.isNotEmpty) 'system': systemPrompt,
         'messages': claudeMessages,
-      },
+      }),
     );
 
     final data = _safeDecode(res.data);
