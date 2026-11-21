@@ -279,7 +279,7 @@ class LearnerProfileNotifier extends StateNotifier<LearnerProfileState> {
   }
 }
 
-/// Persistent Universal Multi-Provider AI Settings State (Nimo v8.0 Quantum).
+/// Persistent Universal Multi-Provider AI Settings State (Nimo v9.0 OmniControl).
 class AiSettingsState {
   final String activeProviderId;
   final Map<String, ProviderCredential> credentials;
@@ -297,6 +297,9 @@ class AiSettingsState {
   final String elevenLabsVoiceId;
   final String nativeVoiceName;
   final String customImageModel;
+  final bool dualFusionEnabled;
+  final String fusionPartnerProviderId;
+  final String fusionMode; // 'synergy' | 'refine'
 
   const AiSettingsState({
     this.activeProviderId = 'pollinations',
@@ -304,7 +307,7 @@ class AiSettingsState {
     this.temperature = 0.7,
     this.maxTokens = 4096,
     this.customSystemPrompt =
-        'You are Nimo v8.0 Quantum — an ultra-intelligent personal AI assistant, principal programmer, realistic voice companion, and smart phone controller developed by YOSSEF JOO. '
+        'You are Nimo v9.0 OmniControl — an ultra-intelligent personal AI assistant, principal programmer, realistic voice companion, and smart phone controller developed by YOSSEF JOO. '
         'Answer deeply, accurately, and clearly in the user language (Arabic or English).',
     this.smartFallbackEnabled = true,
     this.deepThinkingEnabled = false,
@@ -317,6 +320,9 @@ class AiSettingsState {
     this.elevenLabsVoiceId = '21m00Tcm4TlvDq8ikWAM',
     this.nativeVoiceName = '',
     this.customImageModel = '',
+    this.dualFusionEnabled = false,
+    this.fusionPartnerProviderId = 'pollinations',
+    this.fusionMode = 'synergy',
   });
 
   AiProviderPreset get activePreset => AiProviderCatalog.byId(activeProviderId);
@@ -379,6 +385,9 @@ class AiSettingsState {
     String? elevenLabsVoiceId,
     String? nativeVoiceName,
     String? customImageModel,
+    bool? dualFusionEnabled,
+    String? fusionPartnerProviderId,
+    String? fusionMode,
   }) {
     return AiSettingsState(
       activeProviderId: activeProviderId ?? this.activeProviderId,
@@ -397,6 +406,9 @@ class AiSettingsState {
       elevenLabsVoiceId: elevenLabsVoiceId ?? this.elevenLabsVoiceId,
       nativeVoiceName: nativeVoiceName ?? this.nativeVoiceName,
       customImageModel: customImageModel ?? this.customImageModel,
+      dualFusionEnabled: dualFusionEnabled ?? this.dualFusionEnabled,
+      fusionPartnerProviderId: fusionPartnerProviderId ?? this.fusionPartnerProviderId,
+      fusionMode: fusionMode ?? this.fusionMode,
     );
   }
 }
@@ -418,6 +430,9 @@ class AiSettingsNotifier extends StateNotifier<AiSettingsState> {
   static const _kElevenVoice = 'nimo_elevenlabs_voice_v4';
   static const _kNativeVoice = 'nimo_native_voice_v4';
   static const _kCustomImageModel = 'nimo_custom_image_model_v4';
+  static const _kDualFusionEnabled = 'nimo_dual_fusion_enabled_v9';
+  static const _kFusionPartner = 'nimo_fusion_partner_v9';
+  static const _kFusionMode = 'nimo_fusion_mode_v9';
 
   final SharedPreferences? _preloadedPrefs;
 
@@ -466,6 +481,9 @@ class AiSettingsNotifier extends StateNotifier<AiSettingsState> {
         elevenLabsVoiceId: prefs.getString(_kElevenVoice) ?? '21m00Tcm4TlvDq8ikWAM',
         nativeVoiceName: prefs.getString(_kNativeVoice) ?? '',
         customImageModel: safeImgModel,
+        dualFusionEnabled: prefs.getBool(_kDualFusionEnabled) ?? false,
+        fusionPartnerProviderId: prefs.getString(_kFusionPartner) ?? 'pollinations',
+        fusionMode: prefs.getString(_kFusionMode) ?? 'synergy',
       );
     } catch (_) {
       return const AiSettingsState();
@@ -504,6 +522,9 @@ class AiSettingsNotifier extends StateNotifier<AiSettingsState> {
       await prefs.setString(_kElevenVoice, state.elevenLabsVoiceId);
       await prefs.setString(_kNativeVoice, state.nativeVoiceName);
       await prefs.setString(_kCustomImageModel, state.customImageModel);
+      await prefs.setBool(_kDualFusionEnabled, state.dualFusionEnabled);
+      await prefs.setString(_kFusionPartner, state.fusionPartnerProviderId);
+      await prefs.setString(_kFusionMode, state.fusionMode);
     } catch (_) {}
   }
 
@@ -550,6 +571,9 @@ class AiSettingsNotifier extends StateNotifier<AiSettingsState> {
     String? elevenLabsVoiceId,
     String? nativeVoiceName,
     String? customImageModel,
+    bool? dualFusionEnabled,
+    String? fusionPartnerProviderId,
+    String? fusionMode,
   }) async {
     state = state.copyWith(
       temperature: temperature,
@@ -566,6 +590,9 @@ class AiSettingsNotifier extends StateNotifier<AiSettingsState> {
       elevenLabsVoiceId: elevenLabsVoiceId,
       nativeVoiceName: nativeVoiceName,
       customImageModel: customImageModel,
+      dualFusionEnabled: dualFusionEnabled,
+      fusionPartnerProviderId: fusionPartnerProviderId,
+      fusionMode: fusionMode,
     );
     await _persist();
   }

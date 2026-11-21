@@ -11,7 +11,7 @@ import 'package:talkora_ai/core/storage/app_state_provider.dart';
 import 'package:talkora_ai/core/widgets/ios_components.dart';
 import 'package:talkora_ai/core/widgets/nimo_animations.dart';
 
-/// Nimo v8.0 Quantum — Locked-120fps Matte Home Hub with Instant Quick-Ask Bar,
+/// Nimo v9.0 OmniControl — Locked-120fps Matte Home Hub with Instant Quick-Ask Bar,
 /// AI Battle Arena Shortcut, Live Pulse Status & Staggered Feature Grid.
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -111,6 +111,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                   ),
                   NimoGlassTap(
+                    onTap: () async {
+                      NimoSoundFx.pop();
+                      final bridge = ref.read(nativeBridgeProvider);
+                      final running = await bridge.isFloatingBubbleRunning();
+                      if (running) {
+                        await bridge.stopFloatingBubble();
+                      } else {
+                        await bridge.startFloatingBubble();
+                      }
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              running
+                                  ? (isAr ? 'تم إيقاف الأيقونة العائمة' : 'Floating Bubble stopped')
+                                  : (isAr ? 'تم تشغيل الأيقونة العائمة للتحكم الصوتي!' : 'Floating Voice Bubble active!'),
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    child: const IosIconBadge(
+                      icon: CupertinoIcons.mic_circle_fill,
+                      color: TalkoraColors.iosGreen,
+                      size: 38,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  NimoGlassTap(
                     onTap: () => context.push('/settings'),
                     child: const IosIconBadge(
                       icon: CupertinoIcons.gear_alt_fill,
@@ -150,7 +179,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           border: InputBorder.none,
                           focusedBorder: InputBorder.none,
                           contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                          hintText: isAr ? 'اسأل Nimo v8.0 سؤالاً ببث حي فوري...' : 'Ask Nimo v8.0 (Live Stream)...',
+                          hintText: isAr ? 'اسأل Nimo v9.0 سؤالاً ببث حي فوري...' : 'Ask Nimo v9.0 (Live Stream)...',
                         ),
                       ),
                     ),
@@ -207,7 +236,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      isAr ? 'Nimo v8.0 Quantum — سرعة فائقة وبث حي' : 'Nimo v8.0 Quantum — Live Streaming AI',
+                      isAr ? 'Nimo v9.0 OmniControl — سرعة فائقة وبث حي' : 'Nimo v9.0 OmniControl — Live Streaming AI',
                       textAlign: TextAlign.center,
                       style: theme.textTheme.titleLarge?.copyWith(color: Colors.white),
                     ),
@@ -267,9 +296,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             const SizedBox(height: 18),
 
-            // Nimo v8.0 Quantum Super Suite Grid
+            // Nimo v9.0 OmniControl Super Suite Grid
             Text(
-              isAr ? 'قدرات Nimo v8.0 Quantum' : 'Nimo v8.0 Quantum Suite',
+              isAr ? 'قدرات Nimo v9.0 OmniControl' : 'Nimo v9.0 OmniControl Suite',
               style: theme.textTheme.titleLarge,
             ),
             const SizedBox(height: 12),
@@ -286,8 +315,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   _IosFeatureTile(
                     icon: CupertinoIcons.bolt_fill,
                     color: TalkoraColors.iosOrange,
-                    title: isAr ? 'ساحة مقارنة AI' : 'AI Battle Arena',
-                    subtitle: isAr ? 'قارن نموذجين معاً فوراً' : 'Compare 2 models live',
+                    title: isAr ? 'دمج نموذجين AI' : 'Dual-Model Fusion',
+                    subtitle: isAr ? 'ادمج نموذجين معاً بذكاء' : 'Fuse 2 AI models live',
                     onTap: () => context.push('/arena'),
                   ),
                   _IosFeatureTile(
@@ -321,8 +350,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   _IosFeatureTile(
                     icon: CupertinoIcons.device_phone_portrait,
                     color: TalkoraColors.iosGreen,
-                    title: isAr ? 'إدارة الهاتف والتطبيقات' : 'Phone Manager',
-                    subtitle: isAr ? 'فتح التطبيقات والأوامر' : 'Apps, Torch & System',
+                    title: isAr ? 'التحكم الكامل بالهاتف' : 'OmniControl Phone',
+                    subtitle: isAr ? 'الرسائل، الأسماء والفقاعة' : 'SMS, Contacts & Bubble',
                     onTap: () => context.push('/device-hub'),
                   ),
                   _IosFeatureTile(
@@ -398,7 +427,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             NimoGlassTap(
               onTap: () => ref.read(nativeBridgeProvider).openWhatsApp(
                     phone: '01029892573',
-                    message: 'مرحباً مهندس YOSSEF JOO، أتواصل معك من داخل تطبيق Nimo v8.0 Quantum',
+                    message: 'مرحباً مهندس YOSSEF JOO، أتواصل معك من داخل تطبيق Nimo v9.0 OmniControl',
                   ),
               child: Card(
                 child: ListTile(
@@ -409,7 +438,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   title: const Text('YOSSEF JOO', style: TextStyle(fontWeight: FontWeight.w700)),
                   subtitle: Text(
-                    isAr ? 'مطور Nimo v8.0 Quantum • واتساب: 01029892573' : 'Nimo v8.0 Quantum Developer • WhatsApp: 01029892573',
+                    isAr ? 'مطور Nimo v9.0 OmniControl • واتساب: 01029892573' : 'Nimo v9.0 OmniControl Developer • WhatsApp: 01029892573',
                   ),
                   trailing: const Icon(CupertinoIcons.arrow_up_right_circle_fill, color: TalkoraColors.iosGreen),
                 ),

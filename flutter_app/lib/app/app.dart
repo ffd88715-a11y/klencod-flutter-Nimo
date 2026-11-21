@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talkora_ai/app/router.dart';
 import 'package:talkora_ai/app/theme/app_theme.dart';
 import 'package:talkora_ai/core/audio/sound_fx_service.dart';
+import 'package:talkora_ai/core/device/native_bridge_service.dart';
 import 'package:talkora_ai/core/knowledge/github_knowledge_service.dart';
 import 'package:talkora_ai/core/knowledge/nimo_local_db_service.dart';
 import 'package:talkora_ai/core/storage/app_state_provider.dart';
@@ -16,6 +18,8 @@ class TalkoraApp extends ConsumerStatefulWidget {
 }
 
 class _TalkoraAppState extends ConsumerState<TalkoraApp> {
+  StreamSubscription<NativeVoiceEvent>? _bubbleSub;
+
   @override
   void initState() {
     super.initState();
@@ -23,7 +27,30 @@ class _TalkoraAppState extends ConsumerState<TalkoraApp> {
       if (!mounted) return;
       ref.read(nimoLocalDbProvider.notifier).load();
       ref.read(githubKnowledgeProvider);
+      _listenForFloatingBubblePrompts();
     });
+  }
+
+  void _listenForFloatingBubblePrompts() {
+    final bridge = ref.read(nativeBridgeProvider);
+    _bubbleSub = bridge.voiceEvents.listen((event) {
+      if (event.type == 'bubble_prompt' && event.text.trim().isNotEmpty && mounted) {
+        ref.read(chatPrefillPromptProvider.notifier).state = event.text.trim();
+        ref.read(appRouterProvider).go('/chat');
+      }
+    });
+    bridge.getPendingBubblePrompt().then((pending) {
+      if (pending.trim().isNotEmpty && mounted) {
+        ref.read(chatPrefillPromptProvider.notifier).state = pending.trim();
+        ref.read(appRouterProvider).go('/chat');
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _bubbleSub?.cancel();
+    super.dispose();
   }
 
   @override
@@ -50,7 +77,6 @@ class _TalkoraAppState extends ConsumerState<TalkoraApp> {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      // Removed root-level SelectionArea that caused global layout/hit-test stutter on Android!
       builder: (context, child) {
         return Directionality(
           textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,

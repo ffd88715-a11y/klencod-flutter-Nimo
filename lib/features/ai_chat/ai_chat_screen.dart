@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:talkora_ai/app/theme/app_theme.dart';
 import 'package:talkora_ai/core/ai/ai_provider_models.dart';
 import 'package:talkora_ai/core/ai/ai_tool_executor.dart';
+import 'package:talkora_ai/core/ai/dual_model_fusion_service.dart';
 import 'package:talkora_ai/core/ai/image_gen_service.dart';
 import 'package:talkora_ai/core/audio/realistic_tts_service.dart';
 import 'package:talkora_ai/core/audio/sound_fx_service.dart';
@@ -83,7 +84,7 @@ class _ChatSession {
   }
 }
 
-/// Nimo v8.0 Quantum — Live SSE Streaming AI Chat Studio with Stop Generation,
+/// Nimo v9.0 OmniControl — Live SSE Streaming AI Chat Studio with Stop Generation,
 /// Multi-Session History, Pro Prompt Library, In-Chat Search & Self-Healing Model Persistence.
 class AiChatScreen extends ConsumerStatefulWidget {
   const AiChatScreen({super.key});
@@ -104,7 +105,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
       icon: CupertinoIcons.sparkles,
       color: TalkoraColors.iosBlue,
       prompt:
-          'You are Nimo v8.0 Quantum developed by YOSSEF JOO. You are an ultra-intelligent, thorough, accurate assistant powered by a unified knowledge base and GitHub/API datasets. Answer deeply, clearly, and practically in the user language (Arabic or English). Format code in fenced code blocks.',
+          'You are Nimo v9.0 OmniControl developed by YOSSEF JOO. You are an ultra-intelligent, thorough, accurate assistant powered by a unified knowledge base and GitHub/API datasets. Answer deeply, clearly, and practically in the user language (Arabic or English). Format code in fenced code blocks.',
     ),
     _TutorPersona(
       id: 'coder',
@@ -608,6 +609,51 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
         ? session.messages.sublist(session.messages.length - 18)
         : session.messages;
 
+    // 3.5 DUAL-MODEL FUSION MODE (Two AI Models Collaborating Together!)
+    if (aiSettings.dualFusionEnabled && aiSettings.fusionPartnerProviderId != aiSettings.activeProviderId) {
+      final fusionService = ref.read(dualModelFusionProvider);
+      final fusionRes = await fusionService.runDualFusion(
+        settings: aiSettings,
+        messages: recentContext,
+        providerA: aiSettings.activeProviderId,
+        providerB: aiSettings.fusionPartnerProviderId,
+        mode: aiSettings.fusionMode,
+        systemPromptOverride: sysPrompt.toString(),
+        ragContext: combinedRag,
+        isArabic: isAr,
+        onStatus: (st) {
+          if (mounted) setState(() => _streamingPreview = '⚡ $st');
+        },
+      );
+      if (!mounted) return;
+      _activeCancelToken = null;
+      if (fusionRes.success) {
+        final outcome = aiSettings.deviceControlEnabled
+            ? await executor.executeAiTags(fusionRes.mergedText, isArabic: isAr)
+            : ToolExecutionOutcome(cleanReply: fusionRes.mergedText);
+        setState(() {
+          session.messages.add(
+            AiChatMessage(
+              role: 'assistant',
+              content: outcome.cleanReply,
+              timestamp: DateTime.now(),
+              modelUsed: '${fusionRes.fusionBadge} (${fusionRes.totalLatencyMs}ms)',
+              actionBadge: outcome.actionBadge ??
+                  (isAr ? 'دمج نموذجين (Dual AI)' : 'Dual-Model Fusion'),
+              imageUrl: outcome.generatedImageUrl,
+              latencyMs: fusionRes.totalLatencyMs,
+            ),
+          );
+          _streamingPreview = '';
+          _isSending = false;
+        });
+        ref.read(learnerProfileProvider.notifier).addXp(18);
+        await _saveSessions();
+        _scrollToBottom();
+        return;
+      }
+    }
+
     // 4. REAL-TIME LIVE STREAMING CALL (throttled UI paint every 45ms for 120fps smoothness!)
     final result = await aiService.streamChat(
       settings: aiSettings,
@@ -722,7 +768,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
   void _exportChat() {
     if (_messages.isEmpty) return;
     NimoSoundFx.click();
-    final buf = StringBuffer('=== Nimo v8.0 Quantum Chat Export ===\n\n');
+    final buf = StringBuffer('=== Nimo v9.0 OmniControl Chat Export ===\n\n');
     for (final m in _messages) {
       buf.writeln('${m.role == 'user' ? 'User' : 'Nimo'}: ${m.content}\n');
     }
@@ -762,6 +808,91 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                 ],
               ),
               const SizedBox(height: 8),
+              StatefulBuilder(
+                builder: (sheetCtx, setSheetState) {
+                  final liveAi = ref.read(aiSettingsProvider);
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SwitchListTile.adaptive(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              isAr ? 'دمج نموذجين معاً في الشات (Dual AI)' : 'Dual-Model Fusion in Chat',
+                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                            ),
+                            subtitle: Text(
+                              isAr
+                                  ? 'تشغيل النموذج النشط + نموذج شريك لدمج أقوى إجابة'
+                                  : 'Combine active model + partner model for super-answers',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            value: liveAi.dualFusionEnabled,
+                            onChanged: (v) async {
+                              await ref.read(aiSettingsProvider.notifier).updateAdvanced(dualFusionEnabled: v);
+                              setSheetState(() {});
+                              if (mounted) setState(() {});
+                            },
+                          ),
+                          if (liveAi.dualFusionEnabled) ...[
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    value: AiProviderCatalog.all.any((x) => x.id == liveAi.fusionPartnerProviderId && x.id != 'ollama')
+                                        ? liveAi.fusionPartnerProviderId
+                                        : 'pollinations',
+                                    isExpanded: true,
+                                    decoration: InputDecoration(
+                                      labelText: isAr ? 'النموذج الشريك' : 'Partner Model',
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    ),
+                                    items: AiProviderCatalog.all
+                                        .where((x) => x.id != 'ollama')
+                                        .map((x) => DropdownMenuItem(value: x.id, child: Text(x.shortName, overflow: TextOverflow.ellipsis)))
+                                        .toList(),
+                                    onChanged: (val) async {
+                                      if (val != null) {
+                                        await ref.read(aiSettingsProvider.notifier).updateAdvanced(fusionPartnerProviderId: val);
+                                        setSheetState(() {});
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    value: liveAi.fusionMode == 'refine' ? 'refine' : 'synergy',
+                                    isExpanded: true,
+                                    decoration: InputDecoration(
+                                      labelText: isAr ? 'أسلوب الدمج' : 'Fusion Mode',
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    ),
+                                    items: [
+                                      DropdownMenuItem(value: 'synergy', child: Text(isAr ? 'دمج تآزري' : 'Synergy')),
+                                      DropdownMenuItem(value: 'refine', child: Text(isAr ? 'مسودة + مراجعة' : 'Draft→Refine')),
+                                    ],
+                                    onChanged: (val) async {
+                                      if (val != null) {
+                                        await ref.read(aiSettingsProvider.notifier).updateAdvanced(fusionMode: val);
+                                        setSheetState(() {});
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
               ...AiProviderCatalog.all.map((p) {
                 final active = p.id == ai.activeProviderId;
                 final hasKey = !p.requiresApiKey ||

@@ -1,16 +1,12 @@
 package ai.talkora.app
 
+import android.Manifest
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.hardware.camera2.CameraCharacteristics
-import android.hardware.camera2.CameraManager
 import android.media.AudioManager
 import android.net.Uri
-import android.view.SoundEffectConstants
-import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
@@ -24,6 +20,9 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.view.SoundEffectConstants
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -37,6 +36,7 @@ class MainActivity : FlutterActivity(), TextToSpeech.OnInitListener {
 
     private val methodChannelName = "ai.talkora.app/native_bridge"
     private val voiceEventChannelName = "ai.talkora.app/voice_events"
+    private val phonePermRequestCode = 9102
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var voiceEventSink: EventChannel.EventSink? = null
@@ -44,7 +44,28 @@ class MainActivity : FlutterActivity(), TextToSpeech.OnInitListener {
     private var speechRecognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private var ttsReady: Boolean = false
-    private var torchEnabled: Boolean = false
+    private var pendingPermResult: MethodChannel.Result? = null
+    private var pendingBubblePrompt: String? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        captureBubbleIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        captureBubbleIntent(intent)
+    }
+
+    private fun captureBubbleIntent(intent: Intent?) {
+        val prompt = intent?.getStringExtra(NimoFloatingVoiceService.EXTRA_VOICE_PROMPT)?.trim()
+        if (!prompt.isNullOrEmpty()) {
+            pendingBubblePrompt = prompt
+            intent.removeExtra(NimoFloatingVoiceService.EXTRA_VOICE_PROMPT)
+            emitVoiceEvent(mapOf("type" to "bubble_prompt", "text" to prompt))
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -55,6 +76,11 @@ class MainActivity : FlutterActivity(), TextToSpeech.OnInitListener {
             .setStreamHandler(object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
                     voiceEventSink = events
+                    val p = pendingBubblePrompt
+                    if (!p.isNullOrEmpty()) {
+                        pendingBubblePrompt = null
+                        emitVoiceEvent(mapOf("type" to "bubble_prompt", "text" to p))
+                    }
                 }
 
                 override fun onCancel(arguments: Any?) {
@@ -66,27 +92,17 @@ class MainActivity : FlutterActivity(), TextToSpeech.OnInitListener {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     // ==================== LIVE VOICE (STT / TTS) ====================
-                    "isSpeechAvailable" -> {
-                        result.success(SpeechRecognizer.isRecognitionAvailable(this))
-                    }
+                    "isSpeechAvailable" -> result.success(SpeechRecognizer.isRecognitionAvailable(this))
                     "startListening" -> {
                         val locale = call.argument<String>("locale") ?: "ar-EG"
                         startSpeechListening(locale, result)
                     }
                     "stopListening" -> {
-                        mainHandler.post {
-                            try {
-                                speechRecognizer?.stopListening()
-                            } catch (_: Exception) {}
-                        }
+                        mainHandler.post { try { speechRecognizer?.stopListening() } catch (_: Exception) {} }
                         result.success(true)
                     }
                     "cancelListening" -> {
-                        mainHandler.post {
-                            try {
-                                speechRecognizer?.cancel()
-                            } catch (_: Exception) {}
-                        }
+                        mainHandler.post { try { speechRecognizer?.cancel() } catch (_: Exception) {} }
                         result.success(true)
                     }
                     "playClickSound" -> {
@@ -111,38 +127,115 @@ class MainActivity : FlutterActivity(), TextToSpeech.OnInitListener {
                         speakText(text, locale, rate, pitch, voiceName, result)
                     }
                     "stopSpeaking" -> {
-                        try {
-                            tts?.stop()
-                        } catch (_: Exception) {}
+                        try { tts?.stop() } catch (_: Exception) {}
                         emitVoiceEvent(mapOf("type" to "tts_stopped"))
                         result.success(true)
                     }
 
-                    // ==================== PHONE APPS & FULL DEVICE MANAGEMENT ====================
-                    "getInstalledApps" -> {
-                        result.success(getInstalledLaunchableApps())
+                    // ==================== NIMO v9.0 OMNI PHONE INTELLIGENCE ====================
+                    "getSmsMessages" -> {
+                        val limit = call.argument<Int>("limit") ?: 60
+                        val query = call.argument<String>("query") ?: ""
+                        result.success(NimoPhoneHelper.readSmsMessages(this, limit, query))
                     }
+                    "getContacts" -> {
+                        val query = call.argument<String>("query") ?: ""
+                        val limit = call.argument<Int>("limit") ?: 300
+                        result.success(NimoPhoneHelper.readContacts(this, query, limit))
+                    }
+                    "findContact" -> {
+                        val query = call.argument<String>("query") ?: ""
+                        result.success(NimoPhoneHelper.findBestContact(this, query))
+                    }
+                    "getCallLogs" -> {
+                        val limit = call.argument<Int>("limit") ?: 40
+                        result.success(NimoPhoneHelper.readCallLogs(this, limit))
+                    }
+                    "getFullDeviceReport" -> {
+                        result.success(NimoPhoneHelper.readFullDeviceReport(this))
+                    }
+                    "getDeviceStatus" -> {
+                        result.success(NimoPhoneHelper.readFullDeviceReport(this))
+                    }
+                    "getPermissionsStatus" -> {
+                        result.success(buildPermissionsStatusMap())
+                    }
+                    "requestPhonePermissions" -> {
+                        requestAllPhonePermissions(result)
+                    }
+                    "requestOverlayPermission" -> {
+                        result.success(openOverlayPermissionScreen())
+                    }
+                    "openAccessibilitySettings" -> {
+                        result.success(openAccessibilitySettingsScreen())
+                    }
+                    "startFloatingBubble" -> {
+                        result.success(startFloatingBubbleService())
+                    }
+                    "stopFloatingBubble" -> {
+                        result.success(stopFloatingBubbleService())
+                    }
+                    "isFloatingBubbleRunning" -> {
+                        result.success(NimoFloatingVoiceService.isRunning)
+                    }
+                    "getPendingBubblePrompt" -> {
+                        val p = pendingBubblePrompt ?: ""
+                        pendingBubblePrompt = null
+                        result.success(p)
+                    }
+                    "performVoiceType" -> {
+                        val text = call.argument<String>("text") ?: ""
+                        val acc = NimoVoiceControlAccessibilityService.instance
+                        if (acc != null && acc.typeTextIntoFocusedField(text, true)) {
+                            result.success(true)
+                        } else {
+                            NimoPhoneHelper.copyToClipboard(this, text)
+                            result.success(false)
+                        }
+                    }
+                    "performSystemAction" -> {
+                        val action = call.argument<String>("action") ?: ""
+                        val acc = NimoVoiceControlAccessibilityService.instance
+                        result.success(acc?.performSystemAction(action) ?: false)
+                    }
+                    "setVolume" -> {
+                        val stream = call.argument<String>("stream") ?: "music"
+                        val percent = call.argument<Int>("percent") ?: 50
+                        result.success(NimoPhoneHelper.setStreamVolume(this, stream, percent))
+                    }
+                    "adjustVolume" -> {
+                        val direction = call.argument<String>("direction") ?: "up"
+                        result.success(NimoPhoneHelper.adjustVolume(this, direction))
+                    }
+                    "searchWeb" -> {
+                        val query = call.argument<String>("query") ?: ""
+                        result.success(NimoPhoneHelper.searchWeb(this, query))
+                    }
+
+                    // ==================== PHONE APPS & DEVICE ACTIONS ====================
+                    "getInstalledApps" -> result.success(NimoPhoneHelper.getInstalledLaunchableApps(this))
                     "launchApp" -> {
                         val query = call.argument<String>("query") ?: ""
-                        result.success(launchAppByQuery(query))
+                        result.success(NimoPhoneHelper.launchAppByQuery(this, query))
                     }
                     "openUrl" -> {
                         val url = call.argument<String>("url") ?: ""
-                        result.success(openExternalUrl(url))
+                        result.success(NimoPhoneHelper.openExternalUrl(this, url))
                     }
                     "openWhatsApp" -> {
                         val phone = call.argument<String>("phone") ?: ""
                         val message = call.argument<String>("message") ?: ""
-                        result.success(openWhatsAppChat(phone, message))
+                        result.success(NimoPhoneHelper.openWhatsAppChat(this, phone, message))
                     }
                     "dialPhone" -> {
                         val phone = call.argument<String>("phone") ?: ""
-                        result.success(dialNumber(phone))
+                        val direct = call.argument<Boolean>("direct") ?: false
+                        result.success(NimoPhoneHelper.dialOrCallNumber(this, phone, direct))
                     }
                     "sendSms" -> {
                         val phone = call.argument<String>("phone") ?: ""
                         val message = call.argument<String>("message") ?: ""
-                        result.success(composeSms(phone, message))
+                        result.success(NimoPhoneHelper.composeSms(this, phone, message))
                     }
                     "sendEmail" -> {
                         val to = call.argument<String>("to") ?: ""
@@ -154,7 +247,7 @@ class MainActivity : FlutterActivity(), TextToSpeech.OnInitListener {
                         val hour = call.argument<Int>("hour") ?: 7
                         val minute = call.argument<Int>("minute") ?: 0
                         val message = call.argument<String>("message") ?: "Nimo Alarm"
-                        result.success(createAlarm(hour, minute, message))
+                        result.success(NimoPhoneHelper.createAlarm(this, hour, minute, message))
                     }
                     "setTimer" -> {
                         val seconds = call.argument<Int>("seconds") ?: 60
@@ -164,22 +257,19 @@ class MainActivity : FlutterActivity(), TextToSpeech.OnInitListener {
                     "openMaps" -> {
                         val query = call.argument<String>("query") ?: ""
                         val navigate = call.argument<Boolean>("navigate") ?: false
-                        result.success(launchMaps(query, navigate))
+                        result.success(NimoPhoneHelper.launchMaps(this, query, navigate))
                     }
                     "searchYoutube" -> {
                         val query = call.argument<String>("query") ?: ""
-                        result.success(launchYoutubeSearch(query))
+                        result.success(NimoPhoneHelper.searchYoutube(this, query))
                     }
                     "openSystemSetting" -> {
                         val target = call.argument<String>("target") ?: "main"
                         result.success(openAndroidSettings(target))
                     }
                     "toggleFlashlight" -> {
-                        val enabled = call.argument<Boolean>("enabled") ?: !torchEnabled
-                        result.success(setFlashlight(enabled))
-                    }
-                    "getDeviceStatus" -> {
-                        result.success(readDeviceStatus())
+                        val enabled = call.argument<Boolean>("enabled") ?: !NimoPhoneHelper.torchEnabled
+                        result.success(NimoPhoneHelper.setFlashlight(this, enabled))
                     }
                     "shareText" -> {
                         val text = call.argument<String>("text") ?: ""
@@ -198,6 +288,113 @@ class MainActivity : FlutterActivity(), TextToSpeech.OnInitListener {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    // ==================== PERMISSIONS & FLOATING BUBBLE ====================
+    private fun buildPermissionsStatusMap(): Map<String, Boolean> {
+        val canOverlay = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Settings.canDrawOverlays(this)
+        } else {
+            true
+        }
+        return mapOf(
+            "sms" to NimoPhoneHelper.hasPermission(this, Manifest.permission.READ_SMS),
+            "contacts" to NimoPhoneHelper.hasPermission(this, Manifest.permission.READ_CONTACTS),
+            "callLog" to NimoPhoneHelper.hasPermission(this, Manifest.permission.READ_CALL_LOG),
+            "callPhone" to NimoPhoneHelper.hasPermission(this, Manifest.permission.CALL_PHONE),
+            "mic" to NimoPhoneHelper.hasPermission(this, Manifest.permission.RECORD_AUDIO),
+            "overlay" to canOverlay,
+            "accessibility" to NimoVoiceControlAccessibilityService.isRunning(),
+            "bubbleRunning" to NimoFloatingVoiceService.isRunning
+        )
+    }
+
+    private fun requestAllPhonePermissions(result: MethodChannel.Result) {
+        val needed = mutableListOf(
+            Manifest.permission.READ_SMS,
+            Manifest.permission.READ_CONTACTS,
+            Manifest.permission.READ_CALL_LOG,
+            Manifest.permission.CALL_PHONE,
+            Manifest.permission.RECORD_AUDIO
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            needed.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        val missing = needed.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missing.isEmpty()) {
+            result.success(buildPermissionsStatusMap())
+            return
+        }
+        pendingPermResult = result
+        ActivityCompat.requestPermissions(this, missing.toTypedArray(), phonePermRequestCode)
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == phonePermRequestCode) {
+            pendingPermResult?.success(buildPermissionsStatusMap())
+            pendingPermResult = null
+        }
+    }
+
+    private fun openOverlayPermissionScreen(): Boolean {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")
+                ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+                startActivity(intent)
+            }
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun openAccessibilitySettingsScreen(): Boolean {
+        return try {
+            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun startFloatingBubbleService(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            openOverlayPermissionScreen()
+            return false
+        }
+        return try {
+            val intent = Intent(this, NimoFloatingVoiceService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun stopFloatingBubbleService(): Boolean {
+        return try {
+            stopService(Intent(this, NimoFloatingVoiceService::class.java))
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 
     // ==================== NATIVE TTS IMPLEMENTATION ====================
@@ -414,184 +611,12 @@ class MainActivity : FlutterActivity(), TextToSpeech.OnInitListener {
         }
     }
 
-    // ==================== PHONE APPS & DEVICE MANAGEMENT ====================
-    private fun getInstalledLaunchableApps(): List<Map<String, String>> {
-        val list = mutableListOf<Map<String, String>>()
-        try {
-            val pm = packageManager
-            val mainIntent = Intent(Intent.ACTION_MAIN, null).apply {
-                addCategory(Intent.CATEGORY_LAUNCHER)
-            }
-            val resolved = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                pm.queryIntentActivities(mainIntent, PackageManager.ResolveInfoFlags.of(0))
-            } else {
-                @Suppress("DEPRECATION")
-                pm.queryIntentActivities(mainIntent, 0)
-            }
-            val seen = HashSet<String>()
-            for (ri in resolved) {
-                val pkg = ri.activityInfo?.packageName ?: continue
-                if (pkg == packageName || !seen.add(pkg)) continue
-                val label = ri.loadLabel(pm)?.toString()?.trim() ?: pkg
-                list.add(mapOf("name" to label, "packageName" to pkg))
-            }
-            list.sortBy { it["name"]?.lowercase(Locale.ROOT) ?: "" }
-        } catch (_: Exception) {}
-        return list
-    }
-
-    private fun launchAppByQuery(rawQuery: String): Boolean {
-        val q = rawQuery.trim().lowercase(Locale.ROOT)
-        if (q.isEmpty()) return false
-        try {
-            // 1. Direct package name match
-            packageManager.getLaunchIntentForPackage(rawQuery.trim())?.let { intent ->
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                startActivity(intent)
-                return true
-            }
-
-            // 2. Common Arabic & English app aliases
-            val aliasMap = mapOf(
-                "whatsapp" to listOf("com.whatsapp", "com.whatsapp.w4b"),
-                "واتساب" to listOf("com.whatsapp", "com.whatsapp.w4b"),
-                "واتس" to listOf("com.whatsapp", "com.whatsapp.w4b"),
-                "youtube" to listOf("com.google.android.youtube"),
-                "يوتيوب" to listOf("com.google.android.youtube"),
-                "instagram" to listOf("com.instagram.android"),
-                "انستجرام" to listOf("com.instagram.android"),
-                "انستا" to listOf("com.instagram.android"),
-                "facebook" to listOf("com.facebook.katana", "com.facebook.lite"),
-                "فيسبوك" to listOf("com.facebook.katana", "com.facebook.lite"),
-                "الفيس" to listOf("com.facebook.katana", "com.facebook.lite"),
-                "tiktok" to listOf("com.zhiliaoapp.musically", "com.ss.android.ugc.trill"),
-                "تيك توك" to listOf("com.zhiliaoapp.musically", "com.ss.android.ugc.trill"),
-                "telegram" to listOf("org.telegram.messenger", "org.telegram.messenger.web"),
-                "تيليجرام" to listOf("org.telegram.messenger"),
-                "chrome" to listOf("com.android.chrome"),
-                "كروم" to listOf("com.android.chrome"),
-                "maps" to listOf("com.google.android.apps.maps"),
-                "خرائط" to listOf("com.google.android.apps.maps"),
-                "gmail" to listOf("com.google.android.gm"),
-                "جيميل" to listOf("com.google.android.gm"),
-                "spotify" to listOf("com.spotify.music"),
-                "سبوتيفاي" to listOf("com.spotify.music"),
-                "calculator" to listOf("com.google.android.calculator", "com.sec.android.app.popupcalculator"),
-                "حاسبة" to listOf("com.google.android.calculator", "com.sec.android.app.popupcalculator"),
-                "camera" to listOf("com.android.camera", "com.sec.android.app.camera", "com.google.android.GoogleCamera"),
-                "كاميرا" to listOf("com.android.camera", "com.sec.android.app.camera", "com.google.android.GoogleCamera"),
-                "settings" to listOf("com.android.settings"),
-                "اعدادات" to listOf("com.android.settings"),
-                "الإعدادات" to listOf("com.android.settings")
-            )
-
-            for ((key, pkgs) in aliasMap) {
-                if (q.contains(key)) {
-                    for (pkg in pkgs) {
-                        packageManager.getLaunchIntentForPackage(pkg)?.let { intent ->
-                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            startActivity(intent)
-                            return true
-                        }
-                    }
-                }
-            }
-
-            // 3. Fuzzy search over all installed launchable apps
-            val apps = getInstalledLaunchableApps()
-            val match = apps.firstOrNull { app ->
-                val name = (app["name"] ?: "").lowercase(Locale.ROOT)
-                val pkg = (app["packageName"] ?: "").lowercase(Locale.ROOT)
-                name.contains(q) || q.contains(name) || pkg.contains(q)
-            }
-            val pkg = match?.get("packageName") ?: return false
-            val launchIntent = packageManager.getLaunchIntentForPackage(pkg) ?: return false
-            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            startActivity(launchIntent)
-            return true
-        } catch (_: Exception) {
-            return false
-        }
-    }
-
-    private fun openExternalUrl(url: String): Boolean {
-        return try {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url.trim())).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            startActivity(intent)
-            true
-        } catch (_: Exception) {
-            false
-        }
-    }
-
-    private fun openWhatsAppChat(phone: String, message: String): Boolean {
-        return try {
-            var clean = phone.replace(Regex("[^0-9+]"), "")
-            if (clean.startsWith("0") && clean.length == 11) {
-                clean = "2$clean" // Egypt country code helper
-            }
-            clean = clean.removePrefix("+")
-            val encodedMsg = Uri.encode(message)
-            val url = if (clean.isNotEmpty()) {
-                "https://wa.me/$clean?text=$encodedMsg"
-            } else {
-                "https://wa.me/?text=$encodedMsg"
-            }
-            openExternalUrl(url)
-        } catch (_: Exception) {
-            false
-        }
-    }
-
-    private fun dialNumber(phone: String): Boolean {
-        return try {
-            val clean = phone.replace(Regex("[^0-9+*#]"), "")
-            val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$clean")).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            startActivity(intent)
-            true
-        } catch (_: Exception) {
-            false
-        }
-    }
-
-    private fun composeSms(phone: String, message: String): Boolean {
-        return try {
-            val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$phone")).apply {
-                putExtra("sms_body", message)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            startActivity(intent)
-            true
-        } catch (_: Exception) {
-            false
-        }
-    }
-
+    // ==================== EXTRA SYSTEM INTENTS ====================
     private fun composeEmail(to: String, subject: String, body: String): Boolean {
         return try {
             val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$to")).apply {
                 putExtra(Intent.EXTRA_SUBJECT, subject)
                 putExtra(Intent.EXTRA_TEXT, body)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            startActivity(intent)
-            true
-        } catch (_: Exception) {
-            false
-        }
-    }
-
-    private fun createAlarm(hour: Int, minute: Int, message: String): Boolean {
-        return try {
-            val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
-                putExtra(AlarmClock.EXTRA_HOUR, hour.coerceIn(0, 23))
-                putExtra(AlarmClock.EXTRA_MINUTES, minute.coerceIn(0, 59))
-                putExtra(AlarmClock.EXTRA_MESSAGE, message)
-                putExtra(AlarmClock.EXTRA_SKIP_UI, false)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             startActivity(intent)
@@ -616,27 +641,6 @@ class MainActivity : FlutterActivity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun launchMaps(query: String, navigate: Boolean): Boolean {
-        return try {
-            val uri = if (navigate) {
-                Uri.parse("google.navigation:q=${Uri.encode(query)}")
-            } else {
-                Uri.parse("geo:0,0?q=${Uri.encode(query)}")
-            }
-            val intent = Intent(Intent.ACTION_VIEW, uri).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            startActivity(intent)
-            true
-        } catch (_: Exception) {
-            openExternalUrl("https://www.google.com/maps/search/?api=1&query=${Uri.encode(query)}")
-        }
-    }
-
-    private fun launchYoutubeSearch(query: String): Boolean {
-        return openExternalUrl("https://www.youtube.com/results?search_query=${Uri.encode(query)}")
-    }
-
     private fun openAndroidSettings(target: String): Boolean {
         val action = when (target.lowercase(Locale.ROOT)) {
             "wifi", "واي فاي" -> Settings.ACTION_WIFI_SETTINGS
@@ -646,6 +650,7 @@ class MainActivity : FlutterActivity(), TextToSpeech.OnInitListener {
             "sound", "الصوت" -> Settings.ACTION_SOUND_SETTINGS
             "location", "الموقع" -> Settings.ACTION_LOCATION_SOURCE_SETTINGS
             "apps", "التطبيقات" -> Settings.ACTION_APPLICATION_SETTINGS
+            "accessibility", "الوصول" -> Settings.ACTION_ACCESSIBILITY_SETTINGS
             else -> Settings.ACTION_SETTINGS
         }
         return try {
@@ -661,48 +666,6 @@ class MainActivity : FlutterActivity(), TextToSpeech.OnInitListener {
                 false
             }
         }
-    }
-
-    private fun setFlashlight(enabled: Boolean): Boolean {
-        return try {
-            val cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
-            val cameraId = cameraManager.cameraIdList.firstOrNull { id ->
-                cameraManager.getCameraCharacteristics(id)
-                    .get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
-            } ?: return false
-            cameraManager.setTorchMode(cameraId, enabled)
-            torchEnabled = enabled
-            true
-        } catch (_: Exception) {
-            false
-        }
-    }
-
-    private fun readDeviceStatus(): Map<String, Any> {
-        var batteryPct = -1
-        var isCharging = false
-        try {
-            val ifilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-            val batteryStatus = registerReceiver(null, ifilter)
-            val level = batteryStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-            val scale = batteryStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
-            if (level >= 0 && scale > 0) {
-                batteryPct = (level * 100) / scale
-            }
-            val status = batteryStatus?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
-            isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
-                status == BatteryManager.BATTERY_STATUS_FULL
-        } catch (_: Exception) {}
-
-        return mapOf(
-            "batteryLevel" to batteryPct,
-            "isCharging" to isCharging,
-            "manufacturer" to (Build.MANUFACTURER ?: "Android"),
-            "model" to (Build.MODEL ?: "Device"),
-            "androidVersion" to (Build.VERSION.RELEASE ?: ""),
-            "sdkInt" to Build.VERSION.SDK_INT,
-            "torchEnabled" to torchEnabled
-        )
     }
 
     private fun sharePlainText(text: String, subject: String): Boolean {
