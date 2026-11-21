@@ -279,7 +279,7 @@ class LearnerProfileNotifier extends StateNotifier<LearnerProfileState> {
   }
 }
 
-/// Persistent Universal Multi-Provider AI Settings State (Nimo v7.0 Apex).
+/// Persistent Universal Multi-Provider AI Settings State (Nimo v8.0 Quantum).
 class AiSettingsState {
   final String activeProviderId;
   final Map<String, ProviderCredential> credentials;
@@ -304,7 +304,7 @@ class AiSettingsState {
     this.temperature = 0.7,
     this.maxTokens = 4096,
     this.customSystemPrompt =
-        'You are Nimo v7.0 Apex — an ultra-intelligent personal AI assistant, principal programmer, realistic voice companion, and smart phone controller developed by YOSSEF JOO. '
+        'You are Nimo v8.0 Quantum — an ultra-intelligent personal AI assistant, principal programmer, realistic voice companion, and smart phone controller developed by YOSSEF JOO. '
         'Answer deeply, accurately, and clearly in the user language (Arabic or English).',
     this.smartFallbackEnabled = true,
     this.deepThinkingEnabled = false,

@@ -12,7 +12,7 @@ import 'package:talkora_ai/core/storage/app_state_provider.dart';
 import 'package:talkora_ai/core/widgets/ios_components.dart';
 import 'package:talkora_ai/core/widgets/nimo_animations.dart';
 
-/// Nimo v7.0 Apex — Bulletproof AI Key Vault, Auto-Sanitizer & Live Model Discovery Center.
+/// Nimo v8.0 Quantum — Bulletproof AI Key Vault, Auto-Sanitizer & Live Model Discovery Center.
 /// Fixes every API key issue: strips invisible RTL/LTR chars, never wipes unsaved keys on provider switch,
 /// syncs with preloaded SharedPreferences, and includes parallel "Test All Keys" health diagnostics!
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -900,7 +900,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           // Super Controls
           IosGroupedSection(
-            header: isAr ? 'قدرات Nimo v7.0 Apex' : 'NIMO v7.0 APEX CONTROLS',
+            header: isAr ? 'قدرات Nimo v8.0 Quantum' : 'NIMO v8.0 QUANTUM CONTROLS',
             children: [
               IosSettingsRow(
                 icon: CupertinoIcons.arrow_branch,
@@ -976,7 +976,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             children: [
                               Text(_devName, style: theme.textTheme.titleLarge),
                               Text(
-                                isAr ? 'مطور تطبيق Nimo v7.0 Apex' : 'Lead Developer — Nimo v7.0 Apex',
+                                isAr ? 'مطور تطبيق Nimo v8.0 Quantum' : 'Lead Developer — Nimo v8.0 Quantum',
                                 style: theme.textTheme.bodySmall,
                               ),
                               Text(
@@ -996,7 +996,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             style: FilledButton.styleFrom(backgroundColor: TalkoraColors.iosGreen),
                             onPressed: () => bridge.openWhatsApp(
                               phone: _devWhatsApp,
-                              message: 'مرحباً مهندس $_devName، أتواصل معك بخصوص تطبيق Nimo v7.0 Apex',
+                              message: 'مرحباً مهندس $_devName، أتواصل معك بخصوص تطبيق Nimo v8.0 Quantum',
                             ),
                             icon: const Icon(CupertinoIcons.chat_bubble_fill, size: 18),
                             label: Text(isAr ? 'تواصل واتساب مباشر' : 'WhatsApp'),

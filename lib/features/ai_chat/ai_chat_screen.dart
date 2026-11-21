@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -38,6 +39,24 @@ class _TutorPersona {
   });
 }
 
+class _PromptTemplate {
+  final String titleAr;
+  final String titleEn;
+  final String promptAr;
+  final String promptEn;
+  final IconData icon;
+  final Color color;
+
+  const _PromptTemplate({
+    required this.titleAr,
+    required this.titleEn,
+    required this.promptAr,
+    required this.promptEn,
+    required this.icon,
+    required this.color,
+  });
+}
+
 class _ChatSession {
   final String id;
   String title;
@@ -64,8 +83,8 @@ class _ChatSession {
   }
 }
 
-/// Nimo v7.0 Apex — Multi-Session AI Chat Studio with Live Thinking Wave Animation,
-/// In-Chat Search, Auto Self-Healing Model Persistence & Quick Key Access.
+/// Nimo v8.0 Quantum — Live SSE Streaming AI Chat Studio with Stop Generation,
+/// Multi-Session History, Pro Prompt Library, In-Chat Search & Self-Healing Model Persistence.
 class AiChatScreen extends ConsumerStatefulWidget {
   const AiChatScreen({super.key});
 
@@ -80,12 +99,12 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
   static const List<_TutorPersona> _personas = [
     _TutorPersona(
       id: 'general',
-      nameEn: 'Nimo Apex',
+      nameEn: 'Nimo Quantum',
       nameAr: 'نيمو الخارق',
       icon: CupertinoIcons.sparkles,
       color: TalkoraColors.iosBlue,
       prompt:
-          'You are Nimo v7.0 Apex developed by YOSSEF JOO. You are an ultra-intelligent, thorough, accurate assistant powered by a unified knowledge base and GitHub/API datasets. Answer deeply, clearly, and practically in the user language (Arabic or English). Format code in fenced code blocks.',
+          'You are Nimo v8.0 Quantum developed by YOSSEF JOO. You are an ultra-intelligent, thorough, accurate assistant powered by a unified knowledge base and GitHub/API datasets. Answer deeply, clearly, and practically in the user language (Arabic or English). Format code in fenced code blocks.',
     ),
     _TutorPersona(
       id: 'coder',
@@ -143,6 +162,73 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
     ),
   ];
 
+  static const List<_PromptTemplate> _promptTemplates = [
+    _PromptTemplate(
+      titleAr: 'بناء تطبيق أو صفحة كاملة',
+      titleEn: 'Build Full App / Web Page',
+      promptAr: 'اكتب لي كوداً كاملاً ونظيفاً جاهزاً للتشغيل لـ: ',
+      promptEn: 'Write complete, production-ready code for: ',
+      icon: CupertinoIcons.chevron_left_slash_chevron_right,
+      color: TalkoraColors.iosIndigo,
+    ),
+    _PromptTemplate(
+      titleAr: 'تلخيص فائق بالنقاط',
+      titleEn: 'Executive Bullet Summary',
+      promptAr: 'لخّص لي النص التالي في أهم النقاط العملية بشكل منظم وواضح:\n',
+      promptEn: 'Summarize the following into clear, actionable bullet points:\n',
+      icon: CupertinoIcons.doc_text_fill,
+      color: TalkoraColors.iosBlue,
+    ),
+    _PromptTemplate(
+      titleAr: 'مصحح ومسرّع الأكواد',
+      titleEn: 'Bug Fixer & Optimizer',
+      promptAr: 'افحص الكود التالي وأصلح كل الأخطاء واجعله أسرع وأنظف:\n',
+      promptEn: 'Debug and optimize the following code for maximum performance:\n',
+      icon: CupertinoIcons.wrench_fill,
+      color: TalkoraColors.iosTeal,
+    ),
+    _PromptTemplate(
+      titleAr: 'خطة جيم وتغذية مخصصة',
+      titleEn: 'Custom Gym & Nutrition Plan',
+      promptAr: 'صمّم لي جدول تمارين أسبوعي ونظام تغذية دقيق يناسب هدفي: ',
+      promptEn: 'Design a weekly gym split and nutrition plan for my goal: ',
+      icon: CupertinoIcons.flame_fill,
+      color: TalkoraColors.iosOrange,
+    ),
+    _PromptTemplate(
+      titleAr: 'كتابة إيميل أو رسالة رسمية',
+      titleEn: 'Professional Email Writer',
+      promptAr: 'اكتب لي رسالة رسمية احترافية ومقنعة بخصوص: ',
+      promptEn: 'Write a concise, persuasive professional email about: ',
+      icon: CupertinoIcons.mail_solid,
+      color: TalkoraColors.iosGreen,
+    ),
+    _PromptTemplate(
+      titleAr: 'ترجمة احترافية طبيعية',
+      titleEn: 'Natural Pro Translation',
+      promptAr: 'ترجم النص التالي ترجمة احترافية طبيعية مع الحفاظ على المعنى الدقيق:\n',
+      promptEn: 'Translate naturally while preserving tone and precision:\n',
+      icon: CupertinoIcons.globe,
+      color: TalkoraColors.iosPurple,
+    ),
+    _PromptTemplate(
+      titleAr: 'محتوى فيروسي للسوشيال ميديا',
+      titleEn: 'Viral Social Media Script',
+      promptAr: 'اكتب لي سكريبت فيديو قصير جذاب (Hook + محتوى + Call to Action) عن: ',
+      promptEn: 'Write a high-retention short video script (Hook + Body + CTA) about: ',
+      icon: CupertinoIcons.sparkles,
+      color: TalkoraColors.iosPink,
+    ),
+    _PromptTemplate(
+      titleAr: 'توليد صورة سينمائية 8K',
+      titleEn: 'Generate 8K Cinematic Image',
+      promptAr: 'ارسم لي ',
+      promptEn: '/image ',
+      icon: CupertinoIcons.photo_fill,
+      color: TalkoraColors.iosRed,
+    ),
+  ];
+
   final TextEditingController _inputCtrl = TextEditingController();
   final TextEditingController _chatSearchCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
@@ -151,8 +237,11 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
   String _activeSessionId = 'default';
   String _personaId = 'general';
   bool _isSending = false;
+  String _streamingPreview = '';
+  CancelToken? _activeCancelToken;
   bool _showSearchBar = false;
   String _searchFilter = '';
+  int _lastStreamPaintMs = 0;
 
   _ChatSession get _currentSession {
     if (_sessions.isEmpty) {
@@ -188,6 +277,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
 
   @override
   void dispose() {
+    _activeCancelToken?.cancel();
     _inputCtrl.dispose();
     _chatSearchCtrl.dispose();
     _scrollCtrl.dispose();
@@ -216,7 +306,6 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
           return;
         }
       }
-      // Migrate legacy single-chat history seamlessly
       final legacyRaw = prefs.getString(_kLegacyHistoryKey);
       if (legacyRaw != null && legacyRaw.isNotEmpty && mounted) {
         final list = jsonDecode(legacyRaw) as List<dynamic>;
@@ -260,6 +349,71 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
       _activeSessionId = id;
     });
     _saveSessions();
+  }
+
+  void _stopGeneration() {
+    _activeCancelToken?.cancel('User stopped generation');
+    _activeCancelToken = null;
+    if (_streamingPreview.trim().isNotEmpty) {
+      final partial = _streamingPreview.trim();
+      setState(() {
+        _currentSession.messages.add(
+          AiChatMessage(
+            role: 'assistant',
+            content: partial,
+            timestamp: DateTime.now(),
+            modelUsed: 'Nimo (Stopped)',
+          ),
+        );
+        _streamingPreview = '';
+        _isSending = false;
+      });
+      _saveSessions();
+    } else {
+      setState(() {
+        _streamingPreview = '';
+        _isSending = false;
+      });
+    }
+  }
+
+  void _showPromptStudioSheet(bool isAr) {
+    NimoSoundFx.click();
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+          children: [
+            Text(
+              isAr ? 'مكتبة الأوامر الاحترافية' : 'Pro Prompt Studio',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 10),
+            for (final tpl in _promptTemplates)
+              ListTile(
+                leading: IosIconBadge(icon: tpl.icon, color: tpl.color, size: 34),
+                title: Text(isAr ? tpl.titleAr : tpl.titleEn, style: const TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: Text(
+                  isAr ? tpl.promptAr.trim() : tpl.promptEn.trim(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: () {
+                  NimoSoundFx.click();
+                  Navigator.pop(ctx);
+                  final txt = isAr ? tpl.promptAr : tpl.promptEn;
+                  _inputCtrl.text = txt;
+                  _inputCtrl.selection = TextSelection.fromPosition(TextPosition(offset: txt.length));
+                },
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showSessionsSheet(bool isAr) {
@@ -327,14 +481,18 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
     );
   }
 
-  void _scrollToBottom() {
+  void _scrollToBottom({bool instant = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollCtrl.hasClients) {
-        _scrollCtrl.animateTo(
-          _scrollCtrl.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-        );
+        if (instant) {
+          _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent);
+        } else {
+          _scrollCtrl.animateTo(
+            _scrollCtrl.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+          );
+        }
       }
     });
   }
@@ -351,9 +509,13 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
     }
 
     final userMsg = AiChatMessage(role: 'user', content: text, timestamp: DateTime.now());
+    final cancelToken = CancelToken();
+    _activeCancelToken = cancelToken;
+
     setState(() {
       session.messages.add(userMsg);
       _isSending = true;
+      _streamingPreview = '';
     });
     _scrollToBottom();
 
@@ -363,7 +525,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
     final executor = AiToolExecutor(bridge);
     final isAr = ref.read(learnerProfileProvider).uiLocale == 'ar';
 
-    // 1. Direct Key-Aware Image Generation Command ("/image ..." or "ارسم لي ...")
+    // 1. Direct Key-Aware Image Generation Command
     final imgSlash = RegExp(r"""^/(?:image|img|draw)\s+(.+)$""", caseSensitive: false).firstMatch(text);
     final imgAr = RegExp(r"""^(?:ارسم لي|ارسم|ولد صورة|توليد صورة|اعمل صورة)\s+(.+)$""").firstMatch(text);
     final directImgPrompt = (imgSlash?.group(1) ?? imgAr?.group(1))?.trim();
@@ -396,6 +558,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
           ),
         );
         _isSending = false;
+        _streamingPreview = '';
       });
       await _saveSessions();
       _scrollToBottom();
@@ -418,6 +581,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
             ),
           );
           _isSending = false;
+          _streamingPreview = '';
         });
         await _saveSessions();
         _scrollToBottom();
@@ -428,7 +592,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
     // 3. Build unified RAG context
     final ghState = ref.read(githubKnowledgeProvider);
     final unifiedRag = ghState.ragEnabled
-        ? ref.read(nimoLocalDbProvider.notifier).buildOfflineRagContext(text, limit: 6)
+        ? ref.read(nimoLocalDbProvider.notifier).buildOfflineRagContext(text, limit: 5)
         : '';
     final ghRag = ghState.ragEnabled
         ? ref.read(githubKnowledgeProvider.notifier).buildRagContext(text)
@@ -443,16 +607,29 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
     final recentContext = session.messages.length > 18
         ? session.messages.sublist(session.messages.length - 18)
         : session.messages;
-    final result = await aiService.sendChat(
+
+    // 4. REAL-TIME LIVE STREAMING CALL (throttled UI paint every 45ms for 120fps smoothness!)
+    final result = await aiService.streamChat(
       settings: aiSettings,
       messages: recentContext,
       systemPromptOverride: sysPrompt.toString(),
       ragContext: combinedRag,
+      cancelToken: cancelToken,
+      onToken: (accumulated) {
+        if (!mounted || cancelToken.isCancelled) return;
+        final now = DateTime.now().millisecondsSinceEpoch;
+        if (now - _lastStreamPaintMs >= 45) {
+          _lastStreamPaintMs = now;
+          setState(() => _streamingPreview = accumulated);
+          _scrollToBottom(instant: true);
+        }
+      },
     );
 
-    if (!mounted) return;
+    if (!mounted || cancelToken.isCancelled) return;
+    _activeCancelToken = null;
 
-    // Auto-persist self-healed model on active provider so subsequent messages are instant!
+    // Auto-persist self-healed working model on active provider!
     if (result.success &&
         !result.usedFallback &&
         result.providerId == aiSettings.activeProviderId &&
@@ -522,6 +699,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
           latencyMs: result.latencyMs,
         ),
       );
+      _streamingPreview = '';
       _isSending = false;
     });
     await _saveSessions();
@@ -544,7 +722,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
   void _exportChat() {
     if (_messages.isEmpty) return;
     NimoSoundFx.click();
-    final buf = StringBuffer('=== Nimo v7.0 Apex Chat Export ===\n\n');
+    final buf = StringBuffer('=== Nimo v8.0 Quantum Chat Export ===\n\n');
     for (final m in _messages) {
       buf.writeln('${m.role == 'user' ? 'User' : 'Nimo'}: ${m.content}\n');
     }
@@ -621,7 +799,6 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // React to prefill prompts pushed from Home Quick Ask or Database Screen
     ref.listen<String?>(chatPrefillPromptProvider, (_, next) {
       if (next != null && next.trim().isNotEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) => _consumePrefillIfAny());
@@ -653,7 +830,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
           onTap: _showQuickModelSwitcher,
           child: Column(
             children: [
-              Text(isAr ? 'محادثة Nimo v7.0' : 'Nimo AI Studio', style: theme.textTheme.titleMedium),
+              Text(isAr ? 'محادثة Nimo v8.0' : 'Nimo v8.0 Studio', style: theme.textTheme.titleMedium),
               const SizedBox(height: 2),
               IosStatusPill(
                 label: '${ai.activePreset.shortName} • ${ai.activeModel}',
@@ -744,6 +921,21 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 14),
               scrollDirection: Axis.horizontal,
               children: [
+                ActionChip(
+                  avatar: Icon(CupertinoIcons.sparkles, size: 14, color: theme.colorScheme.primary),
+                  label: Text(isAr ? 'مكتبة الأوامر' : 'Prompts', style: const TextStyle(fontSize: 11.5)),
+                  onPressed: () => _showPromptStudioSheet(isAr),
+                ),
+                const SizedBox(width: 6),
+                ActionChip(
+                  avatar: const Icon(CupertinoIcons.bolt_fill, size: 13, color: TalkoraColors.iosOrange),
+                  label: Text(isAr ? 'مقارنة نموذجين' : 'AI Arena', style: const TextStyle(fontSize: 11.5)),
+                  onPressed: () {
+                    NimoSoundFx.click();
+                    context.push('/arena');
+                  },
+                ),
+                const SizedBox(width: 6),
                 FilterChip(
                   label: Text(isAr ? 'تفكير عميق' : 'Deep Think', style: const TextStyle(fontSize: 11.5)),
                   selected: ai.deepThinkingEnabled,
@@ -755,7 +947,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                 const SizedBox(width: 6),
                 FilterChip(
                   label: Text(
-                    isAr ? 'قاعدة Nimo ($totalRecords)' : 'Unified DB ($totalRecords)',
+                    isAr ? 'قاعدة Nimo ($totalRecords)' : 'DB ($totalRecords)',
                     style: const TextStyle(fontSize: 11.5),
                   ),
                   selected: gh.ragEnabled,
@@ -767,24 +959,15 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                 const SizedBox(width: 6),
                 ActionChip(
                   avatar: const Icon(CupertinoIcons.add, size: 14),
-                  label: Text(isAr ? 'محادثة جديدة' : 'New Chat', style: const TextStyle(fontSize: 11.5)),
+                  label: Text(isAr ? 'محادثة جديدة' : 'New', style: const TextStyle(fontSize: 11.5)),
                   onPressed: () => _createNewSession(isAr),
-                ),
-                const SizedBox(width: 6),
-                ActionChip(
-                  avatar: const Icon(CupertinoIcons.play_fill, size: 13),
-                  label: Text(isAr ? 'مختبر الكود' : 'Code Lab', style: const TextStyle(fontSize: 11.5)),
-                  onPressed: () {
-                    NimoSoundFx.click();
-                    context.push('/coding-lab');
-                  },
                 ),
               ],
             ),
           ),
 
           Expanded(
-            child: displayedMessages.isEmpty
+            child: displayedMessages.isEmpty && !_isSending
                 ? _EmptyStudioView(
                     persona: _activePersona,
                     isAr: isAr,
@@ -793,10 +976,25 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                   )
                 : ListView.builder(
                     controller: _scrollCtrl,
+                    cacheExtent: 600,
+                    addAutomaticKeepAlives: false,
                     padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
                     itemCount: displayedMessages.length + (_isSending ? 1 : 0),
                     itemBuilder: (context, index) {
                       if (_isSending && index == displayedMessages.length) {
+                        if (_streamingPreview.isNotEmpty) {
+                          return RepaintBoundary(
+                            child: NimoChatBubble(
+                              message: AiChatMessage(
+                                role: 'assistant',
+                                content: '$_streamingPreview ▍',
+                                timestamp: DateTime.now(),
+                                modelUsed: '${ai.activePreset.shortName} • Live Stream',
+                              ),
+                              isAr: isAr,
+                            ),
+                          );
+                        }
                         return Align(
                           alignment: AlignmentDirectional.centerStart,
                           child: Container(
@@ -812,7 +1010,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                                 NimoThinkingWave(color: theme.colorScheme.primary),
                                 const SizedBox(width: 10),
                                 Text(
-                                  isAr ? 'Nimo يفكر الآن...' : 'Nimo is thinking...',
+                                  isAr ? 'Nimo يتصل ويبث الإجابة...' : 'Nimo is streaming...',
                                   style: theme.textTheme.bodySmall,
                                 ),
                               ],
@@ -822,23 +1020,25 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                       }
 
                       final msg = displayedMessages[index];
-                      return NimoChatBubble(
-                        message: msg,
-                        isAr: isAr,
-                        onSpeak: msg.role == 'assistant'
-                            ? () => ref.read(realisticTtsProvider).speakHuman(
-                                  text: msg.content,
-                                  aiSettings: ref.read(aiSettingsProvider),
-                                )
-                            : null,
-                        onRegenerate: msg.role == 'assistant' ? () => _regenerateAt(index) : null,
-                        onShare: msg.role == 'assistant'
-                            ? () => ref.read(nativeBridgeProvider).shareText(msg.content, subject: 'Nimo')
-                            : null,
-                        onOpenInCodingLab: (code, lang) {
-                          ref.read(codingLabDraftProvider.notifier).state = (code: code, language: lang);
-                          context.push('/coding-lab');
-                        },
+                      return RepaintBoundary(
+                        child: NimoChatBubble(
+                          message: msg,
+                          isAr: isAr,
+                          onSpeak: msg.role == 'assistant'
+                              ? () => ref.read(realisticTtsProvider).speakHuman(
+                                    text: msg.content,
+                                    aiSettings: ref.read(aiSettingsProvider),
+                                  )
+                              : null,
+                          onRegenerate: msg.role == 'assistant' ? () => _regenerateAt(index) : null,
+                          onShare: msg.role == 'assistant'
+                              ? () => ref.read(nativeBridgeProvider).shareText(msg.content, subject: 'Nimo')
+                              : null,
+                          onOpenInCodingLab: (code, lang) {
+                            ref.read(codingLabDraftProvider.notifier).state = (code: code, language: lang);
+                            context.push('/coding-lab');
+                          },
+                        ),
                       );
                     },
                   ),
@@ -905,10 +1105,14 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                       style: FilledButton.styleFrom(
                         padding: EdgeInsets.zero,
                         minimumSize: const Size(42, 42),
+                        backgroundColor: _isSending ? TalkoraColors.iosRed : theme.colorScheme.primary,
                         shape: const CircleBorder(),
                       ),
-                      onPressed: _isSending ? null : _sendMessage,
-                      child: const Icon(CupertinoIcons.arrow_up, size: 20),
+                      onPressed: _isSending ? _stopGeneration : _sendMessage,
+                      child: Icon(
+                        _isSending ? CupertinoIcons.stop_fill : CupertinoIcons.arrow_up,
+                        size: 19,
+                      ),
                     ),
                   ),
                 ],
@@ -967,15 +1171,15 @@ class _EmptyStudioView extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           isAr
-              ? 'مدعوم بـ $totalRecords سجل معرفي + أحدث موديلات AI'
-              : 'Powered by $totalRecords records + latest AI models',
+              ? 'بث حي فوري + $totalRecords سجل معرفي + نماذج 2026'
+              : 'Live Streaming + $totalRecords records + 2026 AI Models',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium,
         ),
         const SizedBox(height: 18),
         for (int i = 0; i < starters.length; i++)
           NimoEntrance(
-            delay: Duration(milliseconds: 50 * (i + 1)),
+            delay: Duration(milliseconds: 45 * (i + 1)),
             child: Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: NimoGlassTap(

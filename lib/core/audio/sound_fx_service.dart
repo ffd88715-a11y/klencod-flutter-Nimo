@@ -1,69 +1,37 @@
 import 'package:flutter/services.dart';
-import 'package:just_audio/just_audio.dart';
-import 'package:talkora_ai/core/device/native_bridge_service.dart';
 
-/// Nimo Tactile Sound Effects Engine — crisp click, pop & welcome chime.
-/// Uses pre-loaded local WAV assets via just_audio with zero-latency native fallback.
+/// Nimo v8.0 Quantum — Zero-Latency Tactile & System Sound Engine.
+/// Replaces heavy per-tap ExoPlayer/just_audio audio-focus locks that caused UI hitches on Android
+/// with instant native haptic feedback + throttled system click (<1ms, zero frame drop!).
 class NimoSoundFx {
   NimoSoundFx._();
 
   static bool enabled = true;
-  static final AudioPlayer _clickPlayer = AudioPlayer();
-  static final AudioPlayer _popPlayer = AudioPlayer();
-  static final AudioPlayer _chimePlayer = AudioPlayer();
-  static bool _initialized = false;
-  static final NativeBridgeService _bridge = NativeBridgeService();
+  static int _lastClickMs = 0;
 
   static Future<void> warmUp() async {
-    if (_initialized) return;
-    _initialized = true;
-    try {
-      await _clickPlayer.setAsset('assets/audio/nimo_click.wav');
-      await _clickPlayer.setVolume(0.55);
-      await _popPlayer.setAsset('assets/audio/nimo_pop.wav');
-      await _popPlayer.setVolume(0.60);
-      await _chimePlayer.setAsset('assets/audio/nimo_chime.wav');
-      await _chimePlayer.setVolume(0.48);
-    } catch (_) {
-      // Safe fallback in headless/test environments
-    }
+    // Instant — zero audio player allocation needed on startup!
   }
 
-  /// Crisp glass-tap click for buttons, icons, tabs, and chips.
+  /// Zero-latency crisp glass tap with 80ms throttle.
   static void click() {
     if (!enabled) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _lastClickMs < 80) return;
+    _lastClickMs = now;
     HapticFeedback.selectionClick();
-    _playAssetOrNative(_clickPlayer, fallbackNative: true);
+    SystemSound.play(SystemSoundType.click);
   }
 
-  /// Soft confirmation pop for copy, paste, send, and save actions.
+  /// Soft confirmation haptic pop for send/save actions.
   static void pop() {
     if (!enabled) return;
     HapticFeedback.lightImpact();
-    _playAssetOrNative(_popPlayer, fallbackNative: true);
   }
 
-  /// Subtle harmonic glass chime on Nimo splash screen reveal.
+  /// Subtle haptic chime on splash launch.
   static void chime() {
     if (!enabled) return;
-    _playAssetOrNative(_chimePlayer, fallbackNative: false);
-  }
-
-  static Future<void> _playAssetOrNative(AudioPlayer player, {required bool fallbackNative}) async {
-    try {
-      if (!_initialized) {
-        await warmUp();
-      }
-      await player.seek(Duration.zero);
-      await player.play();
-    } catch (_) {
-      if (fallbackNative) {
-        try {
-          await _bridge.playClickSound();
-        } catch (_) {
-          SystemSound.play(SystemSoundType.click);
-        }
-      }
-    }
+    HapticFeedback.selectionClick();
   }
 }

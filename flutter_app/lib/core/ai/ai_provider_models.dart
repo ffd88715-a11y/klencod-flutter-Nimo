@@ -4,7 +4,7 @@ import 'package:talkora_ai/app/theme/app_theme.dart';
 
 /// Bulletproof API Key Sanitizer & Formatter.
 /// Strips invisible Unicode RTL/LTR marks (\u200B-\u200F, \uFEFF), newlines, quotes,
-/// spaces, and accidental "Bearer " or "API_KEY=" prefixes that cause HTTP header crashes!
+/// spaces, and accidental "Bearer " or "API_KEY=" prefixes that cause HTTP header crashes.
 class AiKeySanitizer {
   const AiKeySanitizer._();
 
@@ -12,14 +12,11 @@ class AiKeySanitizer {
     r"""^(?:bearer\s+|api[_-]?key\s*[:=]\s*|token\s*[:=]\s*)""",
     caseSensitive: false,
   );
-  // Keep only printable visible ASCII characters (0x21..0x7E) — safe for all HTTP headers
   static final RegExp _nonAsciiHeaderSafeRe = RegExp(r"""[^\x21-\x7E]""");
 
-  /// Cleans any pasted API key so it is 100% valid for HTTP headers and URLs.
   static String clean(String raw) {
     var s = raw.trim();
     if (s.isEmpty) return '';
-    // Strip surrounding quotes/backticks if pasted from JSON or code
     while (s.length >= 2 &&
         ((s.startsWith('"') && s.endsWith('"')) ||
             (s.startsWith("'") && s.endsWith("'")) ||
@@ -27,12 +24,10 @@ class AiKeySanitizer {
       s = s.substring(1, s.length - 1).trim();
     }
     s = s.replaceFirst(_prefixRe, '').trim();
-    // Strip invisible RTL/LTR marks, zero-width spaces, newlines, tabs, and non-ASCII junk
     s = s.replaceAll(_nonAsciiHeaderSafeRe, '');
     return s;
   }
 
-  /// Returns a safe masked preview like `AIzaSy...x9kQ` for UI display.
   static String mask(String raw) {
     final k = clean(raw);
     if (k.isEmpty) return '';
@@ -40,7 +35,6 @@ class AiKeySanitizer {
     return '${k.substring(0, 6)}...${k.substring(k.length - 4)}';
   }
 
-  /// Checks if a clipboard string looks like a real AI API key.
   static bool looksLikeApiKey(String raw) {
     final k = clean(raw);
     if (k.length < 18 || k.length > 260) return false;
@@ -56,7 +50,7 @@ enum AiWireFormat {
   pollinationsFree,
 }
 
-/// Built-in + Free Instant Cloud + Custom AI provider catalog (Nimo v7.0 Apex).
+/// Built-in + Free Instant Cloud + Custom AI provider catalog (Nimo v8.0 Quantum — Live 2026 Models).
 enum AiProviderType {
   pollinations,
   gemini,
@@ -160,18 +154,22 @@ class AiProviderCatalog {
       id: 'gemini',
       name: 'Google Gemini',
       shortName: 'Gemini',
-      descriptionEn: 'Auto-connects to latest Gemini 2.5 Flash / 2.5 Pro / 2.0 Flash + Image Gen',
-      descriptionAr: 'يتصل تلقائياً بأحدث نماذج جوجل الحقيقية (Gemini 2.5 Flash / Pro و 2.0 Flash) + توليد صور',
+      descriptionEn: 'Live 2026 Gemini 3.8 Flash, 3.7 Flash, 3.6 Flash, 3.5 Flash & Gemini 4 + Image Gen',
+      descriptionAr: 'أحدث نماذج جوجل الحية 2026: Gemini 3.8 Flash و 3.7 Flash و 3.6 Flash و Gemini 4 + توليد صور',
       defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-      defaultModel: 'gemini-2.5-flash',
+      defaultModel: 'gemini-3.8-flash',
       defaultImageModel: 'gemini-2.0-flash-exp-image-generation',
       suggestedModels: [
+        'gemini-3.8-flash',
+        'gemini-3.7-flash',
+        'gemini-3.6-flash',
+        'gemini-3.5-flash',
+        'gemini-3.5-flash-lite',
+        'gemini-4-argon',
+        'gemini-4-carbon',
+        'gemini-4-hydrogen',
+        'gemini-3.1-pro-preview',
         'gemini-2.5-flash',
-        'gemini-2.5-flash-lite',
-        'gemini-2.5-pro',
-        'gemini-2.0-flash',
-        'gemini-2.0-flash-lite',
-        'gemini-1.5-flash',
       ],
       wireFormat: AiWireFormat.googleGemini,
       hasFreeTier: true,
@@ -182,11 +180,11 @@ class AiProviderCatalog {
       keyGuideAr: [
         'اضغط على "افتح صفحة المفتاح" لفتح Google AI Studio.',
         'سجّل الدخول بحساب Google ثم اضغط Create API key.',
-        'انسخ المفتاح (AIzaSy...) والصقه هنا — سيتصل Nimo تلقائياً بأحدث موديل Gemini متاح على مفتاحك!',
+        'انسخ المفتاح (AIzaSy...) والصقه هنا — سيتصل Nimo تلقائياً بأحدث نموذج Gemini 3.8 Flash متاح على مفتاحك!',
       ],
       keyGuideEn: [
         'Tap "Open Key Console" to visit Google AI Studio.',
-        'Create an API key and paste AIzaSy... here — Nimo auto-discovers the newest Gemini model on your key!',
+        'Create an API key and paste AIzaSy... here — Nimo auto-discovers the newest Gemini 3.8 Flash model on your key!',
       ],
       badgeColor: TalkoraColors.iosBlue,
       icon: CupertinoIcons.wand_stars,
@@ -196,8 +194,8 @@ class AiProviderCatalog {
       id: 'openai',
       name: 'OpenAI (GPT)',
       shortName: 'OpenAI',
-      descriptionEn: 'Auto-connects to latest GPT-4.1, GPT-4o, o4-mini + GPT-Image-1 & HD Voice',
-      descriptionAr: 'يتصل تلقائياً بأحدث نماذج OpenAI (GPT-4.1 و GPT-4o و o4-mini) + صور وصوت بشري HD',
+      descriptionEn: 'Auto-connects to latest GPT-5, GPT-4.1, GPT-4o, o4-mini + GPT-Image-1 & HD Voice',
+      descriptionAr: 'يتصل تلقائياً بأحدث نماذج OpenAI (GPT-5 و GPT-4.1 و GPT-4o و o4-mini) + صور وصوت بشري HD',
       defaultBaseUrl: 'https://api.openai.com/v1',
       defaultModel: 'gpt-4o-mini',
       defaultImageModel: 'gpt-image-1',
@@ -468,7 +466,7 @@ class AiProviderCatalog {
       defaultBaseUrl: 'https://api.openai.com/v1',
       defaultModel: 'gpt-4o-mini',
       defaultImageModel: 'dall-e-3',
-      suggestedModels: ['gpt-4o-mini', 'gpt-4o', 'gemini-2.5-flash', 'deepseek-chat'],
+      suggestedModels: ['gpt-4o-mini', 'gpt-4o', 'gemini-3.8-flash', 'deepseek-chat'],
       wireFormat: AiWireFormat.openAiCompatible,
       hasFreeTier: false,
       supportsImageGen: true,
@@ -493,7 +491,7 @@ class AiProviderCatalog {
     );
   }
 
-  /// Automatically identifies the AI provider from the pasted API key prefix!
+  /// Automatically identifies the AI provider from the pasted API key prefix.
   static String? detectProviderFromKey(String rawKey) {
     final k = AiKeySanitizer.clean(rawKey);
     if (k.isEmpty) return null;
@@ -508,25 +506,12 @@ class AiProviderCatalog {
     return null;
   }
 
-  /// Checks if a previously saved model ID is legacy/fictional/deprecated and needs auto-upgrade.
+  /// Only flags genuinely retired/broken model IDs (NEVER blocks live 2026 Gemini 3.x / 4.x models!).
   static bool isLegacyInvalidModel(String model) {
     final m = model.trim().toLowerCase();
-    return m.contains('gemini-3.8') ||
-        m.contains('gemini-3.7') ||
-        m.contains('gemini-3.6') ||
-        m.contains('gemini-3.5') ||
-        m.contains('gemini-4-argon') ||
-        m.contains('nano-banana') ||
-        m.contains('gpt-6') ||
-        m.contains('gpt-image-2.5') ||
-        m.contains('claude-fable') ||
-        m.contains('claude-mythos') ||
-        m.contains('claude-opus-5') ||
-        m.contains('claude-sonnet-5') ||
-        m.contains('deepseek-v4') ||
-        m.contains('grok-4.') ||
-        m.contains('mistral-large-4') ||
-        m.contains('mistral-small-4') ||
+    return m == 'gemini' ||
+        m == 'gemini-pro' ||
+        m == 'gemini-1.0-pro' ||
         m == 'google/gemini-2.0-flash-exp:free';
   }
 }

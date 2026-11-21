@@ -19,12 +19,10 @@ class _TalkoraAppState extends ConsumerState<TalkoraApp> {
   @override
   void initState() {
     super.initState();
-    // Warm up built-in DB (in background isolate), GitHub datasets & sound effects ONCE without rebuilding MaterialApp
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref.read(nimoLocalDbProvider.notifier).load();
       ref.read(githubKnowledgeProvider);
-      NimoSoundFx.warmUp();
     });
   }
 
@@ -52,12 +50,11 @@ class _TalkoraAppState extends ConsumerState<TalkoraApp> {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
+      // Removed root-level SelectionArea that caused global layout/hit-test stutter on Android!
       builder: (context, child) {
         return Directionality(
           textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
-          child: SelectionArea(
-            child: child ?? const SizedBox.shrink(),
-          ),
+          child: child ?? const SizedBox.shrink(),
         );
       },
       routerConfig: router,

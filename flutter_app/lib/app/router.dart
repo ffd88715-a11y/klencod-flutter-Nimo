@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +6,7 @@ import 'package:talkora_ai/app/theme/app_theme.dart';
 import 'package:talkora_ai/core/audio/sound_fx_service.dart';
 import 'package:talkora_ai/core/storage/app_state_provider.dart';
 import 'package:talkora_ai/features/ai_chat/ai_chat_screen.dart';
+import 'package:talkora_ai/features/arena/ai_arena_screen.dart';
 import 'package:talkora_ai/features/challenges/daily_challenge_screen.dart';
 import 'package:talkora_ai/features/coding_lab/coding_lab_screen.dart';
 import 'package:talkora_ai/features/device_hub/device_hub_screen.dart';
@@ -32,14 +32,14 @@ CustomTransitionPage<void> _smoothPage(GoRouterState state, Widget child) {
   return CustomTransitionPage<void>(
     key: state.pageKey,
     child: child,
-    transitionDuration: const Duration(milliseconds: 240),
-    reverseTransitionDuration: const Duration(milliseconds: 200),
+    transitionDuration: const Duration(milliseconds: 210),
+    reverseTransitionDuration: const Duration(milliseconds: 180),
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
       return FadeTransition(
         opacity: curved,
         child: SlideTransition(
-          position: Tween<Offset>(begin: const Offset(0, 0.03), end: Offset.zero).animate(curved),
+          position: Tween<Offset>(begin: const Offset(0, 0.025), end: Offset.zero).animate(curved),
           child: child,
         ),
       );
@@ -55,6 +55,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/onboarding', pageBuilder: (_, s) => _smoothPage(s, const OnboardingScreen())),
       GoRoute(path: '/voice', pageBuilder: (_, s) => _smoothPage(s, const LiveVoiceScreen())),
       GoRoute(path: '/settings', pageBuilder: (_, s) => _smoothPage(s, const SettingsScreen())),
+      GoRoute(path: '/arena', pageBuilder: (_, s) => _smoothPage(s, const AiArenaScreen())),
       GoRoute(path: '/image-studio', pageBuilder: (_, s) => _smoothPage(s, const ImageStudioScreen())),
       GoRoute(path: '/coding-lab', pageBuilder: (_, s) => _smoothPage(s, const CodingLabScreen())),
       GoRoute(path: '/github-db', pageBuilder: (_, s) => _smoothPage(s, const GithubDbScreen())),
@@ -83,7 +84,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   );
 });
 
-/// Nimo v7.0 Apex — GPU-Optimized Glass Bottom Navigation Shell with Spring Tab Indicators.
+/// Nimo v8.0 Quantum — Zero-Blur-Lag Matte Bottom Navigation Shell (locked 120fps on Android!).
 class _IosMainShell extends ConsumerWidget {
   final StatefulNavigationShell navigationShell;
   const _IosMainShell({required this.navigationShell});
@@ -104,75 +105,71 @@ class _IosMainShell extends ConsumerWidget {
     return Scaffold(
       body: navigationShell,
       bottomNavigationBar: RepaintBoundary(
-        child: ClipRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-            child: Container(
-              decoration: BoxDecoration(
-                color: (isDark ? TalkoraColors.darkSurface : TalkoraColors.lightSurface)
-                    .withValues(alpha: 0.90),
-                border: Border(
-                  top: BorderSide(
-                    color: Colors.white.withValues(alpha: isDark ? 0.10 : 0.45),
-                    width: 0.6,
-                  ),
-                ),
+        child: Container(
+          decoration: BoxDecoration(
+            color: (isDark ? TalkoraColors.darkSurface : TalkoraColors.lightSurface)
+                .withValues(alpha: 0.97),
+            border: Border(
+              top: BorderSide(
+                color: (isDark ? TalkoraColors.darkSeparator : TalkoraColors.lightSeparator)
+                    .withValues(alpha: 0.55),
+                width: 0.6,
               ),
-              child: SafeArea(
-                top: false,
-                child: SizedBox(
-                  height: 62,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _IosTabItem(
-                        icon: CupertinoIcons.house,
-                        activeIcon: CupertinoIcons.house_fill,
-                        label: s.t('nav_home'),
-                        selected: navigationShell.currentIndex == 0,
-                        activeColor: activeColor,
-                        inactiveColor: inactiveColor,
-                        onTap: () => switchTab(0),
-                      ),
-                      _IosTabItem(
-                        icon: CupertinoIcons.sparkles,
-                        activeIcon: CupertinoIcons.sparkles,
-                        label: s.t('nav_chat'),
-                        selected: navigationShell.currentIndex == 1,
-                        activeColor: activeColor,
-                        inactiveColor: inactiveColor,
-                        onTap: () => switchTab(1),
-                      ),
-                      _IosTabItem(
-                        icon: CupertinoIcons.chevron_left_slash_chevron_right,
-                        activeIcon: CupertinoIcons.chevron_left_slash_chevron_right,
-                        label: s.t('nav_practice'),
-                        selected: navigationShell.currentIndex == 2,
-                        activeColor: activeColor,
-                        inactiveColor: inactiveColor,
-                        onTap: () => switchTab(2),
-                      ),
-                      _IosTabItem(
-                        icon: CupertinoIcons.layers_alt,
-                        activeIcon: CupertinoIcons.layers_alt_fill,
-                        label: s.t('nav_vocab'),
-                        selected: navigationShell.currentIndex == 3,
-                        activeColor: activeColor,
-                        inactiveColor: inactiveColor,
-                        onTap: () => switchTab(3),
-                      ),
-                      _IosTabItem(
-                        icon: CupertinoIcons.person_crop_circle,
-                        activeIcon: CupertinoIcons.person_crop_circle_fill,
-                        label: s.t('nav_profile'),
-                        selected: navigationShell.currentIndex == 4,
-                        activeColor: activeColor,
-                        inactiveColor: inactiveColor,
-                        onTap: () => switchTab(4),
-                      ),
-                    ],
+            ),
+          ),
+          child: SafeArea(
+            top: false,
+            child: SizedBox(
+              height: 62,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _IosTabItem(
+                    icon: CupertinoIcons.house,
+                    activeIcon: CupertinoIcons.house_fill,
+                    label: s.t('nav_home'),
+                    selected: navigationShell.currentIndex == 0,
+                    activeColor: activeColor,
+                    inactiveColor: inactiveColor,
+                    onTap: () => switchTab(0),
                   ),
-                ),
+                  _IosTabItem(
+                    icon: CupertinoIcons.sparkles,
+                    activeIcon: CupertinoIcons.sparkles,
+                    label: s.t('nav_chat'),
+                    selected: navigationShell.currentIndex == 1,
+                    activeColor: activeColor,
+                    inactiveColor: inactiveColor,
+                    onTap: () => switchTab(1),
+                  ),
+                  _IosTabItem(
+                    icon: CupertinoIcons.chevron_left_slash_chevron_right,
+                    activeIcon: CupertinoIcons.chevron_left_slash_chevron_right,
+                    label: s.t('nav_practice'),
+                    selected: navigationShell.currentIndex == 2,
+                    activeColor: activeColor,
+                    inactiveColor: inactiveColor,
+                    onTap: () => switchTab(2),
+                  ),
+                  _IosTabItem(
+                    icon: CupertinoIcons.layers_alt,
+                    activeIcon: CupertinoIcons.layers_alt_fill,
+                    label: s.t('nav_vocab'),
+                    selected: navigationShell.currentIndex == 3,
+                    activeColor: activeColor,
+                    inactiveColor: inactiveColor,
+                    onTap: () => switchTab(3),
+                  ),
+                  _IosTabItem(
+                    icon: CupertinoIcons.person_crop_circle,
+                    activeIcon: CupertinoIcons.person_crop_circle_fill,
+                    label: s.t('nav_profile'),
+                    selected: navigationShell.currentIndex == 4,
+                    activeColor: activeColor,
+                    inactiveColor: inactiveColor,
+                    onTap: () => switchTab(4),
+                  ),
+                ],
               ),
             ),
           ),
@@ -213,7 +210,7 @@ class _IosTabItem extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
+              duration: const Duration(milliseconds: 200),
               curve: Curves.easeOutCubic,
               padding: EdgeInsets.symmetric(horizontal: selected ? 16 : 10, vertical: 4),
               decoration: BoxDecoration(
@@ -226,7 +223,7 @@ class _IosTabItem extends StatelessWidget {
               ),
               child: AnimatedScale(
                 scale: selected ? 1.08 : 0.96,
-                duration: const Duration(milliseconds: 200),
+                duration: const Duration(milliseconds: 180),
                 curve: Curves.easeOutBack,
                 child: Icon(selected ? activeIcon : icon, color: color, size: 22),
               ),

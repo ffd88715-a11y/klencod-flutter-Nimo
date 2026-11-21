@@ -8,7 +8,7 @@ import 'package:talkora_ai/core/audio/sound_fx_service.dart';
 import 'package:talkora_ai/core/knowledge/nimo_local_db_service.dart';
 import 'package:talkora_ai/core/storage/app_state_provider.dart';
 
-/// Nimo v7.0 Apex — Ultra-Fast Matte Glass Intro Screen (1.15s crisp launch, tap to enter instantly).
+/// Nimo v8.0 Quantum — Ultra-Fast Matte Glass Intro Screen (1.15s crisp launch, tap to enter instantly).
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
@@ -171,7 +171,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
                                   border: Border.all(color: accent.withValues(alpha: 0.28), width: 0.8),
                                 ),
                                 child: Text(
-                                  'Nimo v7.0 Apex • YOSSEF JOO',
+                                  'Nimo v8.0 Quantum • YOSSEF JOO',
                                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: accent),
                                 ),
                               ),

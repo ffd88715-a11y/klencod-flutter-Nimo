@@ -5,16 +5,14 @@ import 'package:go_router/go_router.dart';
 import 'package:talkora_ai/app/theme/app_theme.dart';
 import 'package:talkora_ai/core/ai/image_gen_service.dart';
 import 'package:talkora_ai/core/audio/sound_fx_service.dart';
-import 'package:talkora_ai/core/audio/voice_socket_service.dart';
 import 'package:talkora_ai/core/device/native_bridge_service.dart';
 import 'package:talkora_ai/core/knowledge/nimo_local_db_service.dart';
 import 'package:talkora_ai/core/storage/app_state_provider.dart';
 import 'package:talkora_ai/core/widgets/ios_components.dart';
 import 'package:talkora_ai/core/widgets/nimo_animations.dart';
-import 'package:talkora_ai/core/widgets/talkora_waveform.dart';
 
-/// Nimo v7.0 Apex — High-Speed Animated Home Hub with Instant Quick-Ask Bar,
-/// Live Pulse AI Status, Animated KPI Counters & Staggered Feature Grid.
+/// Nimo v8.0 Quantum — Locked-120fps Matte Home Hub with Instant Quick-Ask Bar,
+/// AI Battle Arena Shortcut, Live Pulse Status & Staggered Feature Grid.
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -59,6 +57,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Scaffold(
       body: SafeArea(
         child: ListView(
+          cacheExtent: 600,
           padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
           children: [
             // Top Bar + Live Pulse AI Model Pill
@@ -124,16 +123,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             const SizedBox(height: 14),
 
-            // NEW v7.0 Instant Quick-Ask Bar
+            // Instant Streaming Quick-Ask Bar
             NimoEntrance(
-              delay: const Duration(milliseconds: 55),
+              delay: const Duration(milliseconds: 45),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: isDark ? TalkoraColors.darkSurface : TalkoraColors.lightSurface,
                   borderRadius: BorderRadius.circular(18),
                   border: Border.all(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.28),
+                    color: theme.colorScheme.primary.withValues(alpha: 0.30),
                     width: 0.9,
                   ),
                 ),
@@ -151,7 +150,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           border: InputBorder.none,
                           focusedBorder: InputBorder.none,
                           contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                          hintText: isAr ? 'اسأل Nimo v7.0 سؤالاً فورياً...' : 'Ask Nimo v7.0 anything...',
+                          hintText: isAr ? 'اسأل Nimo v8.0 سؤالاً ببث حي فوري...' : 'Ask Nimo v8.0 (Live Stream)...',
                         ),
                       ),
                     ),
@@ -174,9 +173,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             const SizedBox(height: 14),
 
-            // Key-Powered Voice + Nimo Studio Hero Card
+            // Lightweight Zero-Lag Hero Card
             NimoEntrance(
-              delay: const Duration(milliseconds: 100),
+              delay: const Duration(milliseconds: 90),
               child: Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -195,23 +194,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   children: [
                     NimoGlassTap(
                       onTap: () => context.push('/voice'),
-                      child: const TalkoraVoiceOrb(
-                        state: VoiceEngineState.listening,
-                        audioLevel: 0.26,
-                        size: 86,
+                      child: Container(
+                        width: 74,
+                        height: 74,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withValues(alpha: 0.20),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.45), width: 1.5),
+                        ),
+                        child: const Icon(CupertinoIcons.waveform, color: Colors.white, size: 34),
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
                     Text(
-                      isAr ? 'تحدث مع Nimo v7.0 Apex بصوت طبيعي' : 'Talk to Nimo v7.0 Apex Live Voice',
+                      isAr ? 'Nimo v8.0 Quantum — سرعة فائقة وبث حي' : 'Nimo v8.0 Quantum — Live Streaming AI',
                       textAlign: TextAlign.center,
                       style: theme.textTheme.titleLarge?.copyWith(color: Colors.white),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       isAr
-                          ? 'مرتبط بـ $totalKnowledge سجل ذكي + ${ai.savedApiKeysCount} مفاتيح AI مفعّلة'
-                          : 'Powered by $totalKnowledge smart records + ${ai.savedApiKeysCount} active API keys',
+                          ? 'مرتبط بـ $totalKnowledge سجل + ${ai.savedApiKeysCount} مفاتيح AI + نماذج 2026'
+                          : 'Powered by $totalKnowledge records + ${ai.savedApiKeysCount} API keys + 2026 models',
                       textAlign: TextAlign.center,
                       style: theme.textTheme.bodySmall?.copyWith(color: Colors.white.withValues(alpha: 0.9)),
                     ),
@@ -249,7 +253,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             },
                             icon: const Icon(CupertinoIcons.sparkles, size: 18),
                             label: Text(
-                              isAr ? 'محادثة Nimo' : 'Nimo Chat',
+                              isAr ? 'محادثة حية' : 'Live Chat',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -263,14 +267,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             const SizedBox(height: 18),
 
-            // Nimo v7.0 Apex Super Suite Grid
+            // Nimo v8.0 Quantum Super Suite Grid
             Text(
-              isAr ? 'قدرات Nimo v7.0 Apex' : 'Nimo v7.0 Apex Suite',
+              isAr ? 'قدرات Nimo v8.0 Quantum' : 'Nimo v8.0 Quantum Suite',
               style: theme.textTheme.titleLarge,
             ),
             const SizedBox(height: 12),
             NimoEntrance(
-              delay: const Duration(milliseconds: 150),
+              delay: const Duration(milliseconds: 130),
               child: GridView.count(
                 crossAxisCount: 2,
                 crossAxisSpacing: 12,
@@ -279,6 +283,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 children: [
+                  _IosFeatureTile(
+                    icon: CupertinoIcons.bolt_fill,
+                    color: TalkoraColors.iosOrange,
+                    title: isAr ? 'ساحة مقارنة AI' : 'AI Battle Arena',
+                    subtitle: isAr ? 'قارن نموذجين معاً فوراً' : 'Compare 2 models live',
+                    onTap: () => context.push('/arena'),
+                  ),
+                  _IosFeatureTile(
+                    icon: CupertinoIcons.lock_shield_fill,
+                    color: TalkoraColors.iosBlue,
+                    title: isAr ? 'خزنة مفاتيح AI' : 'AI Key Vault',
+                    subtitle: isAr ? 'نماذج 2026 وفحص فوري' : '2026 models & health',
+                    onTap: () => context.push('/settings'),
+                  ),
                   _IosFeatureTile(
                     icon: CupertinoIcons.chevron_left_slash_chevron_right,
                     color: TalkoraColors.iosTeal,
@@ -301,13 +319,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     onTap: () => context.push('/github-db'),
                   ),
                   _IosFeatureTile(
-                    icon: CupertinoIcons.lock_shield_fill,
-                    color: TalkoraColors.iosBlue,
-                    title: isAr ? 'خزنة مفاتيح AI' : 'AI Key Vault',
-                    subtitle: isAr ? 'فحص وتنظيف وربط فوري' : 'Auto-clean & Live Verify',
-                    onTap: () => context.push('/settings'),
-                  ),
-                  _IosFeatureTile(
                     icon: CupertinoIcons.device_phone_portrait,
                     color: TalkoraColors.iosGreen,
                     title: isAr ? 'إدارة الهاتف والتطبيقات' : 'Phone Manager',
@@ -316,23 +327,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   _IosFeatureTile(
                     icon: CupertinoIcons.globe,
-                    color: TalkoraColors.iosOrange,
+                    color: TalkoraColors.iosPurple,
                     title: s.t('translator'),
                     subtitle: isAr ? 'ترجمة وتعبيرات أصلية' : 'Idioms & Examples',
                     onTap: () => context.push('/translator'),
                   ),
                   _IosFeatureTile(
-                    icon: CupertinoIcons.person_2_fill,
-                    color: TalkoraColors.iosPurple,
-                    title: s.t('roleplay'),
-                    subtitle: isAr ? '8 مواقف واقعية' : '8 Real Scenarios',
-                    onTap: () => context.push('/roleplay'),
-                  ),
-                  _IosFeatureTile(
                     icon: CupertinoIcons.book_fill,
                     color: TalkoraColors.iosRed,
-                    title: isAr ? 'التدريب والمفردات' : 'Practice & Vocab',
-                    subtitle: isAr ? 'نطق وقواعد وتحديات' : 'Grammar & Challenges',
+                    title: isAr ? 'التدريب والمواقف' : 'Practice & Roleplay',
+                    subtitle: isAr ? 'نطق وقواعد ومحادثة' : 'Grammar & Scenarios',
                     onTap: () => context.push('/practice-hub'),
                   ),
                 ],
@@ -342,7 +346,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
             // Animated Progress Card
             NimoEntrance(
-              delay: const Duration(milliseconds: 200),
+              delay: const Duration(milliseconds: 170),
               child: NimoGlassTap(
                 onTap: () => context.push('/progress'),
                 child: Card(
@@ -394,7 +398,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             NimoGlassTap(
               onTap: () => ref.read(nativeBridgeProvider).openWhatsApp(
                     phone: '01029892573',
-                    message: 'مرحباً مهندس YOSSEF JOO، أتواصل معك من داخل تطبيق Nimo v7.0 Apex',
+                    message: 'مرحباً مهندس YOSSEF JOO، أتواصل معك من داخل تطبيق Nimo v8.0 Quantum',
                   ),
               child: Card(
                 child: ListTile(
@@ -405,7 +409,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   title: const Text('YOSSEF JOO', style: TextStyle(fontWeight: FontWeight.w700)),
                   subtitle: Text(
-                    isAr ? 'مطور Nimo v7.0 Apex • واتساب: 01029892573' : 'Nimo v7.0 Apex Developer • WhatsApp: 01029892573',
+                    isAr ? 'مطور Nimo v8.0 Quantum • واتساب: 01029892573' : 'Nimo v8.0 Quantum Developer • WhatsApp: 01029892573',
                   ),
                   trailing: const Icon(CupertinoIcons.arrow_up_right_circle_fill, color: TalkoraColors.iosGreen),
                 ),

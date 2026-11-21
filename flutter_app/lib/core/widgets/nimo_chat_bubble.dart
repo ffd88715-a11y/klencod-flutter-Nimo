@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:talkora_ai/app/theme/app_theme.dart';
 import 'package:talkora_ai/core/ai/ai_provider_models.dart';
 import 'package:talkora_ai/core/audio/sound_fx_service.dart';
@@ -82,7 +81,7 @@ class NimoChatBubble extends StatelessWidget {
       } else if (tok.startsWith('`') && tok.endsWith('`')) {
         spans.add(TextSpan(
           text: ' ${tok.substring(1, tok.length - 1)} ',
-          style: GoogleFonts.jetBrainsMono(
+          style: TextStyle(fontFamily: 'monospace', 
             fontSize: (baseStyle.fontSize ?? 15) - 1.5,
             color: accent,
             backgroundColor: accent.withValues(alpha: 0.14),
@@ -420,7 +419,7 @@ class _CodeCardBlock extends StatelessWidget {
                 const SizedBox(width: 6),
                 Text(
                   language.toUpperCase(),
-                  style: GoogleFonts.jetBrainsMono(
+                  style: TextStyle(fontFamily: 'monospace', 
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: TalkoraColors.iosTeal,
@@ -474,7 +473,7 @@ class _CodeCardBlock extends StatelessWidget {
               padding: const EdgeInsets.all(12),
               child: SelectableText(
                 code,
-                style: GoogleFonts.jetBrainsMono(
+                style: TextStyle(fontFamily: 'monospace', 
                   fontSize: 12.8,
                   height: 1.5,
                   color: const Color(0xFFE6EDF3),

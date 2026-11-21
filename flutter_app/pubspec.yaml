@@ -1,7 +1,7 @@
 name: talkora_ai
-description: Nimo v7.0 Apex (YOSSEF JOO Edition) — Turbo 120fps Motion Engine, Bulletproof Auto-Sanitized AI Key Vault & Self-Healing Router, Multi-Session AI Chat, Cleaned Unified Mega-DB, Live Code Preview Lab & Key-Powered Voice AI.
+description: Nimo v8.0 Quantum (YOSSEF JOO Edition) — Turbo 120fps Motion Engine, Bulletproof Auto-Sanitized AI Key Vault & Self-Healing Router, Multi-Session AI Chat, Cleaned Unified Mega-DB, Live Code Preview Lab & Key-Powered Voice AI.
 publish_to: "none"
-version: 7.0.0+7
+version: 8.0.0+8
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
