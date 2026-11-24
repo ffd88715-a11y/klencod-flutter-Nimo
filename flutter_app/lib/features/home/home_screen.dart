@@ -11,7 +11,7 @@ import 'package:talkora_ai/core/storage/app_state_provider.dart';
 import 'package:talkora_ai/core/widgets/ios_components.dart';
 import 'package:talkora_ai/core/widgets/nimo_animations.dart';
 
-/// Nimo v9.0 OmniControl — Locked-120fps Matte Home Hub with Instant Quick-Ask Bar,
+/// Nimo v9.5 Nabra Studio — Locked-120fps Matte Home Hub with Instant Quick-Ask Bar,
 /// AI Battle Arena Shortcut, Live Pulse Status & Staggered Feature Grid.
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -179,7 +179,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           border: InputBorder.none,
                           focusedBorder: InputBorder.none,
                           contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                          hintText: isAr ? 'اسأل Nimo v9.0 سؤالاً ببث حي فوري...' : 'Ask Nimo v9.0 (Live Stream)...',
+                          hintText: isAr ? 'اسأل Nimo v9.5 سؤالاً ببث حي فوري...' : 'Ask Nimo v9.5 (Live Stream)...',
                         ),
                       ),
                     ),
@@ -236,7 +236,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      isAr ? 'Nimo v9.0 OmniControl — سرعة فائقة وبث حي' : 'Nimo v9.0 OmniControl — Live Streaming AI',
+                      isAr ? 'Nimo v9.5 Nabra Studio — سرعة فائقة وبث حي' : 'Nimo v9.5 Nabra Studio — Live Streaming AI',
                       textAlign: TextAlign.center,
                       style: theme.textTheme.titleLarge?.copyWith(color: Colors.white),
                     ),
@@ -263,7 +263,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             },
                             icon: const Icon(CupertinoIcons.mic_fill, size: 18),
                             label: Text(
-                              isAr ? 'صوت لايف' : 'Live Voice',
+                              isAr ? 'نَبْرة لايف' : 'Nabra Live',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -296,9 +296,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             const SizedBox(height: 18),
 
-            // Nimo v9.0 OmniControl Super Suite Grid
+            // Nimo v9.5 Nabra Studio Super Suite Grid
             Text(
-              isAr ? 'قدرات Nimo v9.0 OmniControl' : 'Nimo v9.0 OmniControl Suite',
+              isAr ? 'قدرات Nimo v9.5 Nabra Studio' : 'Nimo v9.5 Nabra Studio Suite',
               style: theme.textTheme.titleLarge,
             ),
             const SizedBox(height: 12),
@@ -427,7 +427,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             NimoGlassTap(
               onTap: () => ref.read(nativeBridgeProvider).openWhatsApp(
                     phone: '01029892573',
-                    message: 'مرحباً مهندس YOSSEF JOO، أتواصل معك من داخل تطبيق Nimo v9.0 OmniControl',
+                    message: 'مرحباً مهندس YOSSEF JOO، أتواصل معك من داخل تطبيق Nimo v9.5 Nabra Studio',
                   ),
               child: Card(
                 child: ListTile(
@@ -438,7 +438,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   title: const Text('YOSSEF JOO', style: TextStyle(fontWeight: FontWeight.w700)),
                   subtitle: Text(
-                    isAr ? 'مطور Nimo v9.0 OmniControl • واتساب: 01029892573' : 'Nimo v9.0 OmniControl Developer • WhatsApp: 01029892573',
+                    isAr ? 'مطور Nimo v9.5 Nabra Studio • واتساب: 01029892573' : 'Nimo v9.5 Nabra Studio Developer • WhatsApp: 01029892573',
                   ),
                   trailing: const Icon(CupertinoIcons.arrow_up_right_circle_fill, color: TalkoraColors.iosGreen),
                 ),

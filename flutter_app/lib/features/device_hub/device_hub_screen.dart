@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:talkora_ai/app/theme/app_theme.dart';
+import 'package:talkora_ai/core/audio/realistic_tts_service.dart';
 import 'package:talkora_ai/core/audio/sound_fx_service.dart';
 import 'package:talkora_ai/core/device/native_bridge_service.dart';
 import 'package:talkora_ai/core/storage/app_state_provider.dart';
@@ -181,7 +182,7 @@ class _DeviceHubScreenState extends ConsumerState<DeviceHubScreen> with SingleTi
                 children: [
                   FilledButton.tonalIcon(
                     onPressed: () {
-                      bridge.speak('${sms.displaySender}: ${sms.body}');
+                      ref.read(realisticTtsProvider).speakHuman(text: 'رسالة من ${sms.displaySender}: ${sms.body}', aiSettings: ref.read(aiSettingsProvider));
                     },
                     icon: const Icon(CupertinoIcons.speaker_2_fill, size: 16),
                     label: Text(isAr ? 'قراءة بالصوت' : 'Read Aloud'),
